@@ -5,7 +5,7 @@
 #   DEV_SITE_BUCKET=<bucket> bash scripts/pull_content.sh
 #
 # Never pulled: private/ (the owner-panel password hash) and music/ (the
-# songs are commercial recordings; see CLAUDE.md, "Music"). music.json is
+# songs stay in S3 by the owner's choice; see CLAUDE.md, "Music"). music.json is
 # rewritten to an empty playlist so the mirror runs silent instead of
 # pointing at files it does not have.
 set -euo pipefail

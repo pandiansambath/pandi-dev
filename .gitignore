@@ -4,7 +4,8 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 .env*
-# Commercial recordings are never published (see CLAUDE.md, "Music").
+# Songs stay in S3, not in git (the owner's choice; see CLAUDE.md, "Music").
 content/music/
 *.mp3
 !public/dev/sfx/*.mp3
+__pycache__/

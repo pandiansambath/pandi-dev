@@ -9,8 +9,8 @@ cuts the site's CSS out of the monorepo's globals.css, and rewrites the one
 line that differs here (the page reads its files from this app's own
 /api/dev-site route instead of the FastAPI backend).
 
-It never copies: the editor password hash, the music files (commercial
-recordings, see CLAUDE.md), tokens or anything under docs/secrets.
+It never copies: the editor password hash, the music files (they stay in
+S3, see CLAUDE.md), tokens or anything under docs/secrets.
 Content (photos, résumé, manifests) is refreshed separately with
 scripts/pull_content.sh, because it lives in S3, not in git.
 """

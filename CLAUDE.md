@@ -175,11 +175,11 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   and volume are remembered on their device. The award room has its own
   generated score and shares the mute.
 - `music.json`: `{"tracks":[{"id","title","file","scope":"landing|album|both"}],"volume":0.6}`.
-- **The song files are not in this repo, on purpose.** The live playlist uses a
-  commercial film recording; publishing it in a public repo would be
-  redistribution and invites a takedown. The mirror's `music.json` is an empty
-  playlist, so the sound button simply does not appear. To hear music locally,
-  put your own royalty-free file in `content/music/<id>.mp3` and list it in
+- **The song files live in S3 only, not in this repo** — the owner's choice. The
+  live playlist is his licensed ringtone "Zulfein", streamed from the bucket's
+  `dev-site/music/`; he downloads it from there when needed. The mirror's
+  `music.json` is an empty playlist, so the sound button does not appear here.
+  To hear music locally, put a file in `content/music/<id>.mp3` and list it in
   `content/music.json` (both are git-ignored).
 
 ## 9. House rules (from the owner — follow them)
