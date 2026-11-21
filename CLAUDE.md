@@ -81,6 +81,8 @@ context.
 | `chronicle` | The Chronicle  | `ChronicleDesign.tsx`   | a newspaper front page with him as the lead story |
 | `terminal`  | Terminal       | `TerminalDesign.tsx`    | the whole site as a console |
 | `bento`     | Bento          | `BentoDesign.tsx`       | one screen of live tiles |
+| `blueprint` | Blueprint      | `BlueprintDesign.tsx`   | engineering drawing sheets: a self-drawing frame, live title block and dimension line, the career as a plotted system diagram with data packets, skills as a bill of materials, DineAI as a layer section, CAD crosshairs |
+| `stories`   | Stories        | `StoriesDesign.tsx`     | full-screen photo stories (tap, hold to pause, arrow keys, live stickers) beside a profile with highlight rings and a post grid |
 
 **Themes.** 15 palettes in `dev/theme.ts` (`THEMES`). A theme is a set of
 `--d-*` CSS variables put inline on `.dev-root` by `themeStyle()`; every

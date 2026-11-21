@@ -6,8 +6,8 @@ Chennai, India.
 
 *Life doesn't stop. It moves like a chain.*
 
-- Five complete designs (Chain Reaction, Metro, The Chronicle, Terminal,
-  Bento) and fifteen themes, switchable live.
+- Seven complete designs (Chain Reaction, Metro, The Chronicle, Terminal,
+  Bento, Blueprint, Stories) and fifteen themes, switchable live.
 - A 3D skill orbit, a chain that lights as you scroll and closes into a turning
   3D ring, a live month-by-month career chain, a talking terminal.
 - An award room: strike a 3D treasure chest open to reveal a gold medal, with a
