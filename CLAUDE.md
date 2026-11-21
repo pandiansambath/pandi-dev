@@ -104,6 +104,14 @@ since 1 Jan 2024; single click = details, double click = edit), `Terminal.tsx`
 (the Shell card: type or tap commands), `SkillClusters.tsx`, `Highlights.tsx`,
 `Resume.tsx`, `Finale.tsx` + `ChainRing.tsx` (the 3D chain that assembles,
 closes with a flash and turns; tilt follows the pointer, drag spins it).
+**The chain turn (globals.css `devChainTurn` / `devChainTurnPhone`).** Every
+right-hand card (`[data-link]`) turns about the divider itself — its
+transform-origin is ChainSpine's line, 1.75rem to the left on desktop and 11px on
+a phone — coming round edge-on, facing you full-size mid-screen (contents arriving
+a beat later via `devChainReveal`), then turning on into the chain. Scroll-driven
+(`animation-timeline: view()`, range `cover`), so it runs on the compositor; no
+animation where unsupported or with reduced motion. The divider and its
+travelling light show on phones too, in the left margin behind the cards.
 `flourish.tsx` holds the shared touches: `Wave` (letters swell under the
 cursor) and `CardChrome` (turning gradient edge + chain-link mark).
 
@@ -111,14 +119,16 @@ cursor) and `CardChrome` (turning gradient edge + chain-link mark).
 in three tiers per id `pNN`: `full/` (1800px WebP), `thumb/` (720px) and a 24px
 LQIP inline in `album.json`. Tap the portrait to open it.
 
-**The award room (`app/award`, `AwardStage.tsx`, `chestBits.ts`, `ancientScore.ts`).**
+**The award room (`app/award`, `AwardStage.tsx`, `chestBits.ts`).**
 three.js scene with the CC0 chest: strike it with the hammer, it cracks, shakes
 and bursts open; a "1 GRAM" gold coin rises in golden rays. The canvas stays
 hidden until its first full frame (no half-loaded flashes), the hammer lands on
-the sound, DPR is capped at 1.5. `ancientScore.ts` generates the background
-music live with WebAudio (tanpura drone, bansuri-like flute on Raga Bhupali,
-frame drum, reverb) — no audio file. Its rank link opens page 35 of the
-university rank list PDF.
+the sound, DPR is capped at 1.5. Its music is the owner's chosen track ("Ancient
+Empire" by The Mountain, 128 kbps) at `music/award-ancient-empire.mp3` in the
+bucket (`AWARD_TRACK` in `dev/music.ts`): it fades in to ~45%, loops, shares the
+site's mute, starts on the first tap if the browser holds sound back, and is
+fetched during the intro. Like the other songs it lives in S3, not in this repo.
+Its rank link opens page 35 of the university rank list PDF.
 
 **Dates are always live.** Every number derived from time (years in the chain,
 months, days, the "3 YEARS IN …" countdown, the finale's day count) is computed
@@ -172,8 +182,8 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   Volume and fades go through WebAudio gain nodes because phones ignore an
   audio element's own volume. Opening the album restarts the album playlist
   from its first song; closing it returns to the site playlist. A visitor's mute
-  and volume are remembered on their device. The award room has its own
-  generated score and shares the mute.
+  and volume are remembered on their device. The award room plays its own track
+  (above) and shares the mute.
 - `music.json`: `{"tracks":[{"id","title","file","scope":"landing|album|both"}],"volume":0.6}`.
 - **The song files live in S3 only, not in this repo** — the owner's choice. The
   live playlist is his licensed ringtone "Zulfein", streamed from the bucket's
