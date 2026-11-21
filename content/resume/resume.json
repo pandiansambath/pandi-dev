@@ -1,0 +1,25 @@
+{
+  "version": "fdf7ee8438a7",
+  "updated": "2026-11-21",
+  "pdf": "Pandian_Sambath_Resume.pdf",
+  "docx": "Pandian_Sambath_Resume.docx",
+  "pdfKB": 272,
+  "docxKB": 41,
+  "thumb": {
+    "src": "thumb.webp",
+    "w": 360,
+    "h": 509
+  },
+  "pages": [
+    {
+      "src": "page-1.webp",
+      "w": 1800,
+      "h": 2545
+    },
+    {
+      "src": "page-2.webp",
+      "w": 1800,
+      "h": 2545
+    }
+  ]
+}
