@@ -28,7 +28,7 @@ const SECONDARY =
 export const Finale = memo(function Finale({ days, onResume }: { days: number | null; onResume?: () => void }) {
   const [closed, setClosed] = useState(false);
   return (
-    <section className="dev-reborn relative mt-20 w-full overflow-hidden rounded-[2rem] border border-[var(--d-line)] bg-[var(--d-glass)] px-5 pb-10 pt-12 text-center backdrop-blur-sm sm:mt-28 sm:px-10 sm:pb-12 sm:pt-16">
+    <section className="dev-reborn relative mt-20 w-full overflow-hidden rounded-[2rem] border border-[var(--d-line)] bg-[var(--d-glass)] px-5 pb-10 pt-12 text-center sm:mt-28 sm:px-10 sm:pb-12 sm:pt-16">
       {/* Light behind the ring, in the chain's two colours. */}
       <span
         aria-hidden
@@ -42,7 +42,11 @@ export const Finale = memo(function Finale({ days, onResume }: { days: number | 
           the slogan's words arrive one by one once it has closed. */}
       <div className="relative mt-6 sm:mt-8">
         <ChainRing onAssembled={() => setClosed(true)}>
-          <h2 className="font-display text-[clamp(1.25rem,5vw,3.5rem)] font-semibold leading-[1.1] tracking-tight">
+          <h2
+            className="font-display text-[clamp(1.25rem,5vw,3.5rem)] font-semibold leading-[1.1] tracking-tight"
+            // Readable over the bright chrome of the ring behind it.
+            style={{ textShadow: "0 2px 18px rgba(0,0,0,.7), 0 0 2px rgba(0,0,0,.6)" }}
+          >
             <span className="block text-[var(--d-ink)]">
               {LINE_1.map((word, i) => (
                 <Word key={word} word={word} on={closed} delay={i * 0.09} />

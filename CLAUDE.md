@@ -105,29 +105,44 @@ since 1 Jan 2024; single click = details, double click = edit), `Terminal.tsx`
 (the Shell card: type or tap commands), `SkillClusters.tsx`, `Highlights.tsx`,
 `Resume.tsx`, `Finale.tsx` + `ChainRing.tsx` (the 3D chain that assembles,
 closes with a flash and turns; tilt follows the pointer, drag spins it).
-**The chain turn (globals.css `devChainTurn` / `devChainTurnPhone`).** Every
-right-hand card (`[data-link]`) turns about the divider itself — its
-transform-origin is ChainSpine's line, 1.75rem to the left on desktop and 11px on
-a phone — coming round edge-on, facing you full-size mid-screen (contents arriving
-a beat later via `devChainReveal`), then turning on into the chain. Scroll-driven
-(`animation-timeline: view()`, range `cover`), so it runs on the compositor; no
-animation where unsupported or with reduced motion. The divider and its
-travelling light show on phones too, in the left margin behind the cards.
-**Inside each card (globals.css).** CardChrome (`flourish.tsx`) adds liquid colour
-(`.dev-liquid`: three radial pools of the theme's colours drifting on transforms —
-no blur filter, which would be re-blurred every frame), a light band that crosses
-the card as it faces you (`.dev-sweep`, a named view timeline), the chain-link mark
-turning with the scroll (`devLinkTurn`), card titles arriving with a glitch
-(`devGlitch` on `.dev-wave`) and a gentle float (`devFloat` on the individual
-`translate`/`rotate` properties, so it adds to the scroll turn that owns
-`transform`). Light pulses travel down the divider (`.dev-spine-pulse`).
+**The orbit (globals.css `devRevolve` / `devRevolvePhone`).** Every right-hand
+card (`[data-link]`) lives one orbit round the divider, driven by its own scroll
+position (a named view timeline, `--dev-card`): it starts tiny and far on the LEFT
+(a card still to come, passing behind the portrait column, which sits at `z-[2]`),
+swings round behind the crystal divider growing, arrives full size on the RIGHT
+facing you (the present), then carries on round, shrinking, back to tiny on the
+left. Behind the divider it paints under it (z-index 0), in front over it (3). A
+phone orbits the middle (the divider is centred behind the cards there).
 
-**The cursor (`Cursor.tsx`), on every design.** A dot on the pointer and a
-trailing ring that swells over anything pressable and squeezes on a click; mouse
-only, none for reduced motion; the native cursor stays.
+**The crystal spine (`ChainSpine.tsx`, `.dev-crystal`).** The divider is a column
+of crystal vertebrae (an SVG mask over a theme gradient) with a light running down
+it inside its own clip — nothing in it may move a full-height box, or the page
+grows past its end (that happened once).
 
-**The name (`DecryptText.tsx`)** assembles by the clock (~1.2 s on any device),
-not by the frame: frame-stepped, it stayed noise for 8 s+ on a busy page.
+**Inside each card.** `CardChrome` (`flourish.tsx`) adds one water-crystal texture
+layer (`.dev-liquid`): `liquid.ts` paints a watercolour-and-crystal-vein picture
+once per theme in its colours and hands it to every card as `--dev-liquid`; the
+layer only moves with the card's scroll. Plus a light band in the face-on moment
+(`.dev-sweep`), the chain-link mark turning (`devLinkTurn`), titles arriving with a
+glitch (`devGlitch`). Everything inside a card uses `--dev-card`: a card clips its
+edges, which makes it its own scroll box, so a child's own `view()` timeline would
+measure against the card and could stick invisible ("empty cards").
+
+**Smoothness rules (measured 0.3 → ~50 fps, 22 Nov).** No backdrop blur anywhere
+on the default page; no `filter: blur` on moving layers; no custom-property
+animations (they repaint every frame); no permanent animations on every card;
+motion inside cards is scroll-linked only. Check with a frame-time measurement,
+not by eye — and warm the browser up first (the first run is always slow).
+
+**The dust (`DustField.tsx`).** One quiet WebGL layer of motes behind the page:
+they drift towards you always and faster with the scroll (zoom IN only, never
+out), and part in widening rings where the pointer moves (a tap on a phone) — the
+"stone in water" cursor. Half-rate when idle, asleep when hidden.
+
+**The finale (`ChainRing.tsx`).** A 3D ring of interlocked iridescent chrome links
+(three.js, RoomEnvironment) with drifting motes; the links gather with the scroll,
+the ring flashes when it closes (`onAssembled` brings in the slogan) and turns;
+pointer lean, drag to spin; draws only while visible.
 
 `flourish.tsx` holds the shared touches: `Wave` (letters swell under the
 cursor) and `CardChrome` (turning gradient edge + chain-link mark).
