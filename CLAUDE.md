@@ -107,26 +107,39 @@ since 1 Jan 2024; single click = details, double click = edit), `Terminal.tsx`
 closes with a flash and turns; tilt follows the pointer, drag spins it).
 **The orbit (globals.css `devRevolve` / `devRevolvePhone`).** Every right-hand
 card (`[data-link]`) lives one orbit round the divider, driven by its own scroll
-position (a named view timeline, `--dev-card`): it starts tiny and far on the LEFT
-(a card still to come, passing behind the portrait column, which sits at `z-[2]`),
-swings round behind the crystal divider growing, arrives full size on the RIGHT
-facing you (the present), then carries on round, shrinking, back to tiny on the
-left. Behind the divider it paints under it (z-index 0), in front over it (3). A
-phone orbits the middle (the divider is centred behind the cards there).
+position (a named view timeline, `--dev-card`): far and small on the LEFT (a card
+still to come, passing behind the portrait column, which sits at `z-[2]`), round
+behind the crystal divider, full size on the RIGHT facing you (the present), then
+on round and away. A phone orbits the middle (the divider is centred behind the
+cards there). Transforms only — no z-index in the keyframes (that drags the whole
+orbit onto the main thread); the divider and the portrait column sit above the
+cards for good. CSS also fades a card's words in only in the present
+(`devChainReveal`).
 
-**The crystal spine (`ChainSpine.tsx`, `.dev-crystal`).** The divider is a column
-of crystal vertebrae (an SVG mask over a theme gradient) with a light running down
-it inside its own clip — nothing in it may move a full-height box, or the page
-grows past its end (that happened once).
+**What a card LOOKS like is drawn in WebGL (`CardGL.ts`).** `CardChrome`
+(`flourish.tsx`) only puts a slot in the card; a small pool of WebGL canvases (6 on
+a desktop, 4 on a phone) moves from card to card, near the screen only. For its
+card's place in the orbit (the same progress as the CSS timeline) a canvas draws:
+the card — dark glass with the theme's painted water (`liquid.ts`) drifting in two
+sheets, an iridescent rim in the card's own colour — flat in the centre and curved
+like a piece of the cylinder it travels round as it turns away; the ORB it is when
+away — a wobbling sphere of the same water wound into a spiral, an atmosphere, a
+ragged halo, a disc of bubbles; and the change between them — the card opens out
+of its heart along a ragged glowing front. The cursor stirs the water (rings,
+colour split, a soft light) and draws each card's few motes of dust. A card with
+no canvas wears plain glass, shown only in the present. Do NOT go back to CSS
+layers for this: a dozen layers a card measured 318 layers / 76 MP of layer pixels
+— past the GPU budget, so tiles were thrown away mid-scroll (flicker). Now ~235 /
+27 MP. Measure with the CDP LayerTree domain.
 
-**Inside each card.** `CardChrome` (`flourish.tsx`) adds one water-crystal texture
-layer (`.dev-liquid`): `liquid.ts` paints a watercolour-and-crystal-vein picture
-once per theme in its colours and hands it to every card as `--dev-liquid`; the
-layer only moves with the card's scroll. Plus a light band in the face-on moment
-(`.dev-sweep`), the chain-link mark turning (`devLinkTurn`), titles arriving with a
-glitch (`devGlitch`). Everything inside a card uses `--dev-card`: a card clips its
-edges, which makes it its own scroll box, so a child's own `view()` timeline would
-measure against the card and could stick invisible ("empty cards").
+**The crystal spine (`CrystalSpine.tsx`, inside `ChainSpine.tsx`).** A 3D column
+of vertebrae (lumpy bones, wings, spurs, discs, thorns, crystal shards) in dark
+glass with an oil-slick film, reflecting a dark environment lit by panels in the
+theme's colours (a white room turned it to porcelain). A sticky canvas in the
+divider's lane; the bones are laid out in the column's coordinates and grow out
+of nothing at its ends. Round it: a dense, slow sleeve of bokeh and bubbles and
+fast sparks that surge upward when you scroll. The line and the dot that runs down
+and stops at each card are DOM (ChainSpine).
 
 **Smoothness rules (measured 0.3 → ~50 fps, 22 Nov).** No backdrop blur anywhere
 on the default page; no `filter: blur` on moving layers; no custom-property
@@ -134,18 +147,24 @@ animations (they repaint every frame); no permanent animations on every card;
 motion inside cards is scroll-linked only. Check with a frame-time measurement,
 not by eye — and warm the browser up first (the first run is always slow).
 
-**The dust (`DustField.tsx`).** One quiet WebGL layer of motes behind the page:
-they drift towards you always and faster with the scroll (zoom IN only, never
-out), and part in widening rings where the pointer moves (a tap on a phone) — the
-"stone in water" cursor. Half-rate when idle, asleep when hidden.
+**The background (`DustField.tsx`).** One WebGL layer over the page's vignette
+and under the content: the cards' watercolour across the whole page, quiet,
+zooming IN endlessly with the scroll (never out), and dust drifting towards you.
+Where the pointer moves (a tap on a phone) rings run out like a stone in water —
+through the dust AND the watercolour. Half-rate when idle, asleep when hidden.
 
-**The finale (`ChainRing.tsx`).** A 3D ring of interlocked iridescent chrome links
-(three.js, RoomEnvironment) with drifting motes; the links gather with the scroll,
-the ring flashes when it closes (`onAssembled` brings in the slogan) and turns;
-pointer lean, drag to spin; draws only while visible.
+**The finale (`ChainRing.tsx`).** A ring of 3D links laid ALONG the ring, every
+other one turned a quarter round its long axis, so each passes through its
+neighbours (an earlier version stood them radially, like spokes). Iridescent
+metal tinted in a gradient of the theme round the ring, reflecting a dark env of
+coloured panels. Each link is forged from rising light as the section scrolls in;
+the ring flashes when it closes (`onAssembled` brings in the slogan), rays open
+behind it, a pulse runs round it and a slow wave rolls through the chain. The
+camera keeps the phone's distance on every screen and the lens narrows to frame
+the ring round the slogan's measured width. Draws only while visible.
 
 `flourish.tsx` holds the shared touches: `Wave` (letters swell under the
-cursor) and `CardChrome` (turning gradient edge + chain-link mark).
+cursor) and `CardChrome` (the slot a card's WebGL canvas goes into).
 
 **The album (`Album.tsx`).** Grid → slideshow with Ken Burns motion. Photos come
 in three tiers per id `pNN`: `full/` (1800px WebP), `thumb/` (720px) and a 24px
@@ -198,7 +217,11 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   password.
 - **What it does:** upload photos to the album (≤20 at a time) and remove them;
   upload songs, rename, reorder, choose where each plays (everywhere / site only
-  / album only), set the default volume. Double-clicking a month block edits
+  / album only), set the default volume; REPLACE THE RÉSUMÉ — a new PDF (≤6
+  pages, <10 MB) and optionally its Word file: the server draws the pages with
+  PDFium (`pypdfium2`, BSD — not PyMuPDF, which is AGPL) and rewrites
+  `resume.json`; without a Word file the Word download is removed rather than
+  left offering the old résumé. Double-clicking a month block edits
   milestones; the Studio can save the default theme and design.
 - **Security:** the password is checked **only on the server** against a
   bcrypt hash kept in the private bucket (`dev-site/private/editor.hash`, never
