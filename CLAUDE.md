@@ -116,6 +116,10 @@ orbit onto the main thread); the divider and the portrait column sit above the
 cards for good. CSS also fades a card's words in only in the present
 (`devChainReveal`).
 
+**Surfaces (`CardGL.ts`, `registerSurface`).** The top bar, the popups and the
+sound menu wear the same glass and water as the cards (a surface is always open
+and flat; no orb). Their buttons are glass (`.dev-glassbtn`) over the water.
+
 **What a card LOOKS like is drawn in WebGL (`CardGL.ts`).** `CardChrome`
 (`flourish.tsx`) only puts a slot in the card; a small pool of WebGL canvases (6 on
 a desktop, 4 on a phone) moves from card to card, near the screen only. For its
@@ -147,11 +151,35 @@ animations (they repaint every frame); no permanent animations on every card;
 motion inside cards is scroll-linked only. Check with a frame-time measurement,
 not by eye — and warm the browser up first (the first run is always slow).
 
-**The background (`DustField.tsx`).** One WebGL layer over the page's vignette
-and under the content: the cards' watercolour across the whole page, quiet,
+**The background (`DustField.tsx`, `decor`).** One WebGL layer under the
+content. For the Chain design it also paints the room — the corner washes, three
+drifting blooms, the waves, the vignette and the dot grid — which used to be five
+full-screen layers: ~100 MB of GPU memory on a phone at DPR 2.75, past its tile
+budget (Chrome then fills undrawable tiles with a layer's background colour: the
+orbit's chips came back as black boxes). Keep new full-screen decor in this
+canvas, not in DOM layers; test with `--force-gpu-mem-available-mb=64`. Also: the cards' watercolour across the whole page, quiet,
 zooming IN endlessly with the scroll (never out), and dust drifting towards you.
 Where the pointer moves (a tap on a phone) rings run out like a stone in water —
 through the dust AND the watercolour. Half-rate when idle, asleep when hidden.
+
+**The end of the spine (`CrystalSpine.tsx`).** Over the column's last 240 px
+the vertebrae break apart while interlocking links form among them; the chain
+hangs on `SPINE_TAIL` px below the column (the lane reaches that far: 110 px, 140
+px from sm), swaying, a light running down it, fading just inside the finale's
+top edge.
+
+**The orbit (`SkillOrbit.tsx` + `OrbitWater.ts`).** 20 seats on three rings:
+pinned chips (`ORBIT_RINGS` in `skills.ts`) never change; the others take the
+next skill from the résumé-synced list each time they pass behind the portrait.
+Under every chip, a pill of the cards' moving water — one instanced WebGL canvas
+below the portrait. The portrait's photos and their pace come from
+`portrait.json` (owner panel → Portrait), defaults in `dev/portraits.ts`.
+
+**Every letter answers the cursor (`letterSwell.ts`).** The letters under a
+hovering pointer are made transparent in place with a CSS Custom Highlight (its
+`::highlight` rule is added at run time — the build's CSS minifier drops it) and
+drawn swelling in an overlay: the Wave effect on all text, without touching the
+text React owns. Skips `.dev-wave`, inputs, SVG, gradient text, `[data-noswell]`.
 
 **The finale (`ChainRing.tsx`).** A ring of 3D links laid ALONG the ring, every
 other one turned a quarter round its long axis, so each passes through its
@@ -219,7 +247,9 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   bare "Choose File" boxes did not open inside the panel): upload photos to the
   album (≤20 at a time) and remove them;
   upload songs, rename, reorder, choose where each plays (everywhere / site only
-  / album only), set the default volume; REPLACE THE RÉSUMÉ — a new PDF (≤6
+  / album only), set the default volume; set the PORTRAIT — add, remove,
+  reorder his photos and the seconds each one shows (`POST`/`PUT
+  /dev-site/portrait`); REPLACE THE RÉSUMÉ — a new PDF (≤6
   pages, <10 MB) and optionally its Word file: the server draws the pages with
   PDFium (`pypdfium2`, BSD — not PyMuPDF, which is AGPL) and rewrites
   `resume.json`; without a Word file the Word download is removed rather than

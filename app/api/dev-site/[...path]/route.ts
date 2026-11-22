@@ -12,7 +12,7 @@ const ROOT = path.join(process.cwd(), "content");
 
 // The same narrow list the backend allows, nothing else in the folder.
 const ALLOWED =
-  /^(?:(?:thumb|full)\/p\d{2,3}\.webp|profile(?:-alt)?\.webp|RANK_AFF_UG_2023\.pdf|album\.json|milestones\.json|site\.json|music\.json|music\/[a-z0-9-]{1,48}\.(?:mp3|m4a|ogg)|resume\/(?:Pandian_Sambath_Resume\.(?:pdf|docx)|page-\d\.webp|thumb\.webp|resume\.json))$/;
+  /^(?:(?:thumb|full)\/p\d{2,3}\.webp|profile(?:-alt)?\.webp|RANK_AFF_UG_2023\.pdf|album\.json|milestones\.json|site\.json|music\.json|portrait\.json|portrait\/pt-[a-f0-9]{6}\.webp|music\/[a-z0-9-]{1,48}\.(?:mp3|m4a|ogg)|resume\/(?:Pandian_Sambath_Resume\.(?:pdf|docx)|page-\d\.webp|thumb\.webp|resume\.json))$/;
 
 const TYPES: Record<string, string> = {
   ".webp": "image/webp",
