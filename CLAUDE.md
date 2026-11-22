@@ -215,7 +215,9 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
 
 - **The door:** three quick taps on the "PS" monogram in the top bar. Then the
   password.
-- **What it does:** upload photos to the album (≤20 at a time) and remove them;
+- **What it does** (every file picker is a hidden input opened by a button — the
+  bare "Choose File" boxes did not open inside the panel): upload photos to the
+  album (≤20 at a time) and remove them;
   upload songs, rename, reorder, choose where each plays (everywhere / site only
   / album only), set the default volume; REPLACE THE RÉSUMÉ — a new PDF (≤6
   pages, <10 MB) and optionally its Word file: the server draws the pages with
@@ -232,8 +234,13 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
 
 ## 8. Music
 
-- `dev/music.ts`: one player for the site. Two `<audio>` elements take turns so
-  songs crossfade (2.4 s); a single song crossfades into itself at the loop.
+- `dev/music.ts`: one player for the site. Every song fades in (2.6 s) at its
+  start and out (3.2 s) at its end, with a short quiet (1.4 s) before the next
+  fades in — a single song too, each time it comes round (the owner's rule: no
+  crossfade, no hard cut). Two `<audio>` elements take turns so the next song
+  loads during the fade-out; switches he makes (the album, a new playlist) use a
+  quick version. The award room's own track loops the same way (never
+  `el.loop`).
   Volume and fades go through WebAudio gain nodes because phones ignore an
   audio element's own volume. Opening the album restarts the album playlist
   from its first song; closing it returns to the site playlist. A visitor's mute
