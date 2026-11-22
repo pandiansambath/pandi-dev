@@ -83,6 +83,7 @@ context.
 | `bento`     | Bento          | `BentoDesign.tsx`       | one screen of live tiles |
 | `blueprint` | Blueprint      | `BlueprintDesign.tsx`   | engineering drawing sheets: a self-drawing frame, live title block and dimension line, the career as a plotted system diagram with data packets, skills as a bill of materials, DineAI as a layer section, CAD crosshairs |
 | `stories`   | Stories        | `StoriesDesign.tsx`     | full-screen photo stories (tap, hold to pause, arrow keys, live stickers) beside a profile with highlight rings and a post grid |
+| `ember`     | Ember          | `EmberDesign.tsx`       | a cinematic three.js scene in the immersive-WebGL school: two interlocked iridescent chrome chain links that turn with the scroll and rest when it stops, embers of the theme's colours that rise and burst with scroll speed, a light streak, corner light and moving grain, a glyph loader, chapters whose words rise out of masks, a chapter rail |
 
 **Themes.** 15 palettes in `dev/theme.ts` (`THEMES`). A theme is a set of
 `--d-*` CSS variables put inline on `.dev-root` by `themeStyle()`; every
@@ -112,6 +113,22 @@ a beat later via `devChainReveal`), then turning on into the chain. Scroll-drive
 (`animation-timeline: view()`, range `cover`), so it runs on the compositor; no
 animation where unsupported or with reduced motion. The divider and its
 travelling light show on phones too, in the left margin behind the cards.
+**Inside each card (globals.css).** CardChrome (`flourish.tsx`) adds liquid colour
+(`.dev-liquid`: three radial pools of the theme's colours drifting on transforms —
+no blur filter, which would be re-blurred every frame), a light band that crosses
+the card as it faces you (`.dev-sweep`, a named view timeline), the chain-link mark
+turning with the scroll (`devLinkTurn`), card titles arriving with a glitch
+(`devGlitch` on `.dev-wave`) and a gentle float (`devFloat` on the individual
+`translate`/`rotate` properties, so it adds to the scroll turn that owns
+`transform`). Light pulses travel down the divider (`.dev-spine-pulse`).
+
+**The cursor (`Cursor.tsx`), on every design.** A dot on the pointer and a
+trailing ring that swells over anything pressable and squeezes on a click; mouse
+only, none for reduced motion; the native cursor stays.
+
+**The name (`DecryptText.tsx`)** assembles by the clock (~1.2 s on any device),
+not by the frame: frame-stepped, it stayed noise for 8 s+ on a busy page.
+
 `flourish.tsx` holds the shared touches: `Wave` (letters swell under the
 cursor) and `CardChrome` (turning gradient edge + chain-link mark).
 
