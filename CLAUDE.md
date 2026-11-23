@@ -203,28 +203,42 @@ below it — the lane's length below the column is MEASURED to `[data-surface]`
 the portal is lifted 54 px, clear of the first card the spine stands behind. The
 finale's top is no border but a surface of light, the panel's glass and outline fading
 in below it; DustField draws rings spreading across it in perspective from where the
-chain dips in, and, while it is on screen, dust gathering from the air round the
-chain, curling in to it and running down it into the water. The finale has NO
+chain dips in, and, while it is on screen, eight STREAMS of dust pulled in from both
+sides, narrowing to a thread at the chain and plunging down it into the water (spray
+thrown back up), building as the surface rises; as it passes 72 % of the screen a
+shockwave crosses the water and light runs up the chain; shafts of light pour in. The finale has NO
 scroll-driven entrance: the cards' `dev-reborn` tilted and lowered it as it came in,
 sliding the surface away from the chain.
 
-**The orbit (`SkillOrbit.tsx` + `OrbitWater.ts`).** 20 seats on three rings:
-pinned chips (`ORBIT_RINGS` in `skills.ts`) never change; the others take the
-next skill from the résumé-synced list each time they pass behind the portrait.
-Under every chip, the cards' water: a pill of it in one instanced WebGL canvas below
-the portrait on a desktop, a painted piece of it inside each chip on a phone (no
-context to spare there). The portrait's photos and their pace come from
-`portrait.json` (owner panel → Portrait), defaults in `dev/portraits.ts`.
+**The orbit (`SkillOrbit.tsx`).** 20 seats on three rings: pinned chips
+(`ORBIT_RINGS` in `skills.ts`) never change; the others take the next skill from the
+résumé-synced list each time they pass behind the portrait. Each chip is dark glass with
+the skill crisp in the middle and the cards' water only in a thin liquid rim round its
+edge (painted into the border — the owner found water behind the words unreadable). The
+orbit stops moving while it is off screen. The portrait's photos and their pace come
+from `portrait.json` (owner panel → Portrait), defaults in `dev/portraits.ts`.
 
-**The portrait's looks (`PortraitLooks.tsx`).** Natural · Graded (a tritone grade in
-the theme's depth and warm light over the photo's own colour, the room's two coloured
-lights falling on him) · Water (a cool, submerged grade in the theme's teal and violet,
-the cards' water drifting over him) · Duotone · Noir. SVG
-colour filters built from the live theme (a theme change regrades it); the adapted
-looks melt the photo's edge into the room. A change fades the old look over the new
-while a light passes across. Picked from a small button on the portrait's rim, from the
-Studio's Portrait tab, and — the site's default — in the owner panel (`look` in
-`portrait.json`); a visitor's own pick is remembered on their device.
+**The portrait's designs (`PortraitDesign.tsx`, `PortraitCore.tsx`).** Not colour
+filters but ways of showing him: Natural · Aura (no frame: the face sharp, the edges
+dissolving into a glow of the photo's own colours, a brighter rim) · Immersive (the photo
+sunk into the page behind the orbit's rings, large, soft and graded, the face clear at the
+centre) · Halftone (a real dot screen, drawn on a 2D canvas, in the theme's colours) ·
+Code (his face written in his own skills, auto-levelled) · Hologram (two-tone, red and blue
+fringes, scanlines, a flicker). And with NO PHOTO, a living 3D piece in its place (one
+WebGL canvas, claimed on a phone): Star (granulation, sunspots, corona, prominences, solar
+wind) · Crystal (dark iridescent shards out of rock, a heartbeat of light) · Chain knot
+(interlocking links in a trefoil, a light running round) · Neural (neurons, synapses,
+pulses firing) · Black hole (a shadow, a photon ring, the disc's far side bent over the
+top). Chosen only behind the PS door (`look` in `portrait.json`); `PortraitLooks.tsx`
+holds the SVG filters (graded, duotone, the hologram's colour fringes) built from the live
+theme.
+
+**The Template (`copy.ts`).** Every editable text has a key and its original words; the
+page reads `word(copy, key)` from DevContext; his changes live in `texts.json` (owner panel
+→ Template, `PUT /dev-site/texts`): his name with its font (serif, sans, mono) and colour
+(the sheen, the theme's gradient, gold, plain, two colours of his), the greeting, role,
+company, place, the menu's line, the finale's words, a title. Live as he types; one click
+puts every word back. A new editable text is one line in `copy.ts`.
 
 **Every letter answers the cursor (`letterSwell.ts`).** The letters under a
 hovering pointer are made transparent in place with a CSS Custom Highlight (its
@@ -305,7 +319,10 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   PDFium (`pypdfium2`, BSD — not PyMuPDF, which is AGPL) and rewrites
   `resume.json`; without a Word file the Word download is removed rather than
   left offering the old résumé. Double-clicking a month block edits
-  milestones; the Studio can save the default theme and design.
+  milestones. THE PORTRAIT'S DESIGN (a tap previews it on the page; "Make this
+  the site's look" saves it); THE TEMPLATE (his words for the site, see above); THE
+  SITE tab makes the theme and design on his screen the site's default (the Studio
+  no longer can).
 - **Security:** the password is checked **only on the server** against a
   bcrypt hash kept in the private bucket (`dev-site/private/editor.hash`, never
   served). After 8 failed tries in 15 minutes an IP is locked out (429).
