@@ -120,20 +120,32 @@ cards for good. CSS also fades a card's words in only in the present
 wear the same glass and water as the cards (a surface is always open and flat; no
 orb). Their buttons are glass (`.dev-glassbtn`) over the water.
 
-**The top menu is poured (`LiquidBar.ts` + `TopBar.tsx`).** There is no bar. Every
-element marked `data-liquid` in the header is a drop of the theme's water, and one
-small raw-WebGL canvas behind them draws them as a signed distance field of rounded
-boxes, smooth-unioned — surface tension merges the buttons into one capsule, the PS
-monogram floats alone, and his name (`data-liquid="name"`) pours out of the PS drop
-only while the big nameplate (`[data-hero-name]`) is off screen. Drops fall in one
-after another and each icon pops as its drop lands (`pop(i)` and the drops' delays
-agree); the drop under the cursor swells; near the cursor the liquid draws out a
-bulge after it; a click squashes the drop and sends a ring through it; a fast scroll
-splits the capsule into bobbing beads that flow back together. Springs run in real
-time (stepped at 1/60 s, so a busy page cannot make the drops lag their icons); half
-rate when still; no WebGL → `data-liquid-glass` and each drop is plain glass (CSS).
-The texture is 200 px, not a power of two — the shader mirrors it (WebGL 1 will not
-repeat it).
+**The top menu is written, not drawn (`TopBar.tsx`).** Three menus that drew
+something behind the buttons (a black bar, a water bar, liquid capsules) each pulled
+the eye, so nothing is drawn: small spaced mono capitals in the page's own hand
+(MAIL · LINKEDIN · GITHUB · INSTAGRAM · RÉSUMÉ · THEMES, the music's bars first) in
+quiet ink that brightens under the cursor, every item one style (the résumé only in
+the accent colour), a halo of the page's ground behind the letters for legibility.
+Each word decrypts into place on arrival (on the clock, not per frame); under the
+cursor a hairline draws beneath the word and ends in a small ring — a link of chain.
+It tucks away while you read downwards (`data-tucked`; one small node stays in the
+corner) and returns on any scroll up, a mouse at the top of the screen or a tap on
+the node; never while its menus are open. A phone shows the same items as thin line
+icons with nothing behind them. His name joins the PS mark only while the nameplate
+(`[data-hero-name]`) is off screen. No WebGL in it — see the next paragraph.
+
+**A phone has only a few WebGL contexts (`glGuard.ts`).** Chrome on Android keeps
+about eight live WebGL contexts per page and, past that, kills the OLDEST — and
+paints the dead canvas WHITE with a broken-picture mark (his "white white boards").
+Reproduce with Chrome's `--max-active-webgl-contexts=8` at phone size. So: a phone's
+card pool is 4 canvases and gives one back while the finale's ring or the award room
+claims a context (`claimContext()`); the ring holds one only within ~1.6 screens of
+the finale (a fresh canvas each time — a canvas whose context was freed can never
+have another); the orbit's chips on a phone wear PAINTED water instead of a WebGL
+canvas; the award room frees its context on close. Every WebGL canvas is guarded:
+taken away by the browser, it marks itself `data-gl-lost` (hidden by CSS — the dark
+ground shows, never white) and the card pool cuts its cap. Our own clean-ups free
+contexts on purpose: take the guard off first.
 
 **What a card LOOKS like is drawn in WebGL (`CardGL.ts`).** `CardChrome`
 (`flourish.tsx`) only puts a slot in the card; a small pool of WebGL canvases (6 on
@@ -177,22 +189,39 @@ zooming IN endlessly with the scroll (never out), and dust drifting towards you.
 Where the pointer moves (a tap on a phone) rings run out like a stone in water —
 through the dust AND the watercolour. Half-rate when idle, asleep when hidden.
 
-**The end of the spine, and the surface (`CrystalSpine.tsx`, `Finale.tsx`,
-`DustField.tsx`).** Over the column's last 320 px the vertebrae break apart while
-interlocking links form among them; the chain is lowered `SPINE_TAIL` px below the
-column (62 px, 78 px from sm — the lane reaches that far), swaying, a light running
-down it, through the finale's top. That top is no border: it is a surface of light
-(`[data-surface]`, brightest in the middle where the chain meets it), the panel's
-glass and outline fading in below it, and DustField draws rings spreading across it
-in perspective from where the chain dips in (it reads `[data-surface]` and the
-spine's `canvas.sticky`). The finale starts 48 px (64 from sm) below the column.
+**The two ends of the spine (`CrystalSpine.tsx`, `ChainSpine.tsx`, `Finale.tsx`,
+`DustField.tsx`).** THE TOP is a portal: a disc of dust in perspective, spiralling in
+ever faster and hotter towards a glowing heart with a rim of light, more dust drawn up
+into it from round the first bones — which condense out of the dust, small and loose,
+before settling — opening like an iris when the spine first comes into view; the
+spine's core light rises out of its heart. The lane reaches `SPINE_HEAD` (130 px) above
+the column for it. THE BOTTOM: over the column's last 320 px the vertebrae break apart
+while interlocking links form among them, and the chain is lowered to just through the
+finale's surface — the lane's length below the column is MEASURED to `[data-surface]`
+(ChainSpine writes `data-tail`; a fixed figure fell short on a big screen). The
+finale's top is no border but a surface of light, the panel's glass and outline fading
+in below it; DustField draws rings spreading across it in perspective from where the
+chain dips in, and, while it is on screen, dust gathering from the air round the
+chain, curling in to it and running down it into the water. The finale has NO
+scroll-driven entrance: the cards' `dev-reborn` tilted and lowered it as it came in,
+sliding the surface away from the chain.
 
 **The orbit (`SkillOrbit.tsx` + `OrbitWater.ts`).** 20 seats on three rings:
 pinned chips (`ORBIT_RINGS` in `skills.ts`) never change; the others take the
 next skill from the résumé-synced list each time they pass behind the portrait.
-Under every chip, a pill of the cards' moving water — one instanced WebGL canvas
-below the portrait. The portrait's photos and their pace come from
+Under every chip, the cards' water: a pill of it in one instanced WebGL canvas below
+the portrait on a desktop, a painted piece of it inside each chip on a phone (no
+context to spare there). The portrait's photos and their pace come from
 `portrait.json` (owner panel → Portrait), defaults in `dev/portraits.ts`.
+
+**The portrait's looks (`PortraitLooks.tsx`).** Natural · Graded (a tritone grade in
+the theme's depth and warm light over the photo's own colour, the room's two coloured
+lights falling on him) · Water (Graded under the cards' water) · Duotone · Noir. SVG
+colour filters built from the live theme (a theme change regrades it); the adapted
+looks melt the photo's edge into the room. A change fades the old look over the new
+while a light passes across. Picked from a small button on the portrait's rim, from the
+Studio's Portrait tab, and — the site's default — in the owner panel (`look` in
+`portrait.json`); a visitor's own pick is remembered on their device.
 
 **Every letter answers the cursor (`letterSwell.ts`).** The letters under a
 hovering pointer are made transparent in place with a CSS Custom Highlight (its
