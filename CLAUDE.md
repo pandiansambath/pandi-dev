@@ -116,9 +116,24 @@ orbit onto the main thread); the divider and the portrait column sit above the
 cards for good. CSS also fades a card's words in only in the present
 (`devChainReveal`).
 
-**Surfaces (`CardGL.ts`, `registerSurface`).** The top bar, the popups and the
-sound menu wear the same glass and water as the cards (a surface is always open
-and flat; no orb). Their buttons are glass (`.dev-glassbtn`) over the water.
+**Surfaces (`CardGL.ts`, `registerSurface`).** The popups and the sound menu
+wear the same glass and water as the cards (a surface is always open and flat; no
+orb). Their buttons are glass (`.dev-glassbtn`) over the water.
+
+**The top menu is poured (`LiquidBar.ts` + `TopBar.tsx`).** There is no bar. Every
+element marked `data-liquid` in the header is a drop of the theme's water, and one
+small raw-WebGL canvas behind them draws them as a signed distance field of rounded
+boxes, smooth-unioned — surface tension merges the buttons into one capsule, the PS
+monogram floats alone, and his name (`data-liquid="name"`) pours out of the PS drop
+only while the big nameplate (`[data-hero-name]`) is off screen. Drops fall in one
+after another and each icon pops as its drop lands (`pop(i)` and the drops' delays
+agree); the drop under the cursor swells; near the cursor the liquid draws out a
+bulge after it; a click squashes the drop and sends a ring through it; a fast scroll
+splits the capsule into bobbing beads that flow back together. Springs run in real
+time (stepped at 1/60 s, so a busy page cannot make the drops lag their icons); half
+rate when still; no WebGL → `data-liquid-glass` and each drop is plain glass (CSS).
+The texture is 200 px, not a power of two — the shader mirrors it (WebGL 1 will not
+repeat it).
 
 **What a card LOOKS like is drawn in WebGL (`CardGL.ts`).** `CardChrome`
 (`flourish.tsx`) only puts a slot in the card; a small pool of WebGL canvases (6 on
@@ -162,11 +177,15 @@ zooming IN endlessly with the scroll (never out), and dust drifting towards you.
 Where the pointer moves (a tap on a phone) rings run out like a stone in water —
 through the dust AND the watercolour. Half-rate when idle, asleep when hidden.
 
-**The end of the spine (`CrystalSpine.tsx`).** Over the column's last 240 px
-the vertebrae break apart while interlocking links form among them; the chain
-hangs on `SPINE_TAIL` px below the column (the lane reaches that far: 110 px, 140
-px from sm), swaying, a light running down it, fading just inside the finale's
-top edge.
+**The end of the spine, and the surface (`CrystalSpine.tsx`, `Finale.tsx`,
+`DustField.tsx`).** Over the column's last 320 px the vertebrae break apart while
+interlocking links form among them; the chain is lowered `SPINE_TAIL` px below the
+column (62 px, 78 px from sm — the lane reaches that far), swaying, a light running
+down it, through the finale's top. That top is no border: it is a surface of light
+(`[data-surface]`, brightest in the middle where the chain meets it), the panel's
+glass and outline fading in below it, and DustField draws rings spreading across it
+in perspective from where the chain dips in (it reads `[data-surface]` and the
+spine's `canvas.sticky`). The finale starts 48 px (64 from sm) below the column.
 
 **The orbit (`SkillOrbit.tsx` + `OrbitWater.ts`).** 20 seats on three rings:
 pinned chips (`ORBIT_RINGS` in `skills.ts`) never change; the others take the
