@@ -52,12 +52,12 @@ The mirror plays no music (see §8).
 ```
 app/
   page.tsx                 the profile (server component: loads the manifests, renders DevProfile)
-  award/page.tsx           the award room: 3D chest, hammer, coin, ancient score
+  award/page.tsx           the award room: a real chest, hammer, gold, ancient score
   api/dev-site/[...path]/  read-only file server over content/ (stand-in for the backend)
   layout.tsx, fonts/       Geist, Geist Mono, Fraunces (+ Cinzel for /award), all local
   globals.css              head (this repo) + the site's CSS (synced, dev-* namespaced)
 dev/                       every component of the site (see §4)
-public/dev/                chest.glb (CC0), sfx/*.mp3 (Mixkit), hammer.svg — with CREDITS.md
+public/dev/                models/ (Poly Haven, CC0), sfx/*.mp3 (Mixkit), hammer.svg — with CREDITS.md
 content/                   mirror of S3 dev-site/: album.json, full/, thumb/, profile*.webp,
                            RANK_AFF_UG_2023.pdf, resume/*, music.json (empty playlist here)
 backend/                   the FastAPI router + its tests, for reference
@@ -141,7 +141,7 @@ never put a large value (a data URL) in a custom property on elements restyled p
 write per-frame styles only when they change; never make or drop WebGL contexts while
 scrolling — the card pool is FIXED and WARM (3 on a phone, made during the intro, shaders
 compiled with `compileAsync`, handed out only when ready, never retired) and the finale's
-ring is built once in idle time and kept; a phone's canvases render at lower resolution;
+ring is built once in idle time and kept; only the soft canvases (dust, cards) render at lower resolution on a phone;
 no layout reads inside a frame (cache positions); nothing repaints every frame (the
 name's sheen is still on touch screens).
 
@@ -199,9 +199,12 @@ Where the pointer moves (a tap on a phone) rings run out like a stone in water �
 through the dust AND the watercolour. Half-rate when idle, asleep when hidden.
 
 **The two ends of the spine (`CrystalSpine.tsx`, `ChainSpine.tsx`, `Finale.tsx`,
-`DustField.tsx`).** THE TOP is a portal: a disc of dust in perspective, spiralling in
-ever faster and hotter towards a glowing heart with a rim of light, more dust drawn up
-into it from round the first bones — which condense out of the dust, small and loose,
+`DustField.tsx`).** THE TOP is a portal, a small galaxy: a disc of dust in perspective along two
+spiral arms, turning once in ~75 s and drifting in towards a glowing heart with a rim of
+light (on its own real-time clock; a grain's angle is the disc's turn plus a twist that
+depends only on how far in it is — never clock × speed-at-this-radius, which whirled
+faster the longer the page was open), more dust drawn up into it from round the first
+bones — which condense out of the dust, small and loose,
 before settling — opening like an iris when the spine first comes into view; the
 spine's core light rises out of its heart. The lane reaches `SPINE_HEAD` (130 px) above
 the column for it. THE BOTTOM: over the column's last 320 px the vertebrae break apart
@@ -215,13 +218,37 @@ in below it; DustField draws rings spreading across it in perspective from where
 chain dips in, and, while it is on screen, eight STREAMS of dust pulled in from both
 sides, narrowing to a thread at the chain and plunging down it into the water (spray
 thrown back up), building as the surface rises; as it passes 72 % of the screen a
-shockwave crosses the water and light runs up the chain; shafts of light pour in. The finale has NO
+shockwave crosses the water and light runs up the chain; shafts of light pour in. A HIDDEN EASTER EGG: touch the
+galaxy's heart (`[data-galaxy-heart]`, an unmarked button in the lane) and it draws in,
+swells to several times its size, bursts across the page in streaks and shockwaves,
+hangs as a cloud, and spirals home (`GalaxyBurst.ts`: a 2D canvas over the page for ~5 s
+— no extra WebGL context — removed when it is over; the spine plays its half to the same
+`BURST` clock; a phone vibrates). The finale has NO
 scroll-driven entrance: the cards' `dev-reborn` tilted and lowered it as it came in,
 sliding the surface away from the chain.
 
-**The orbit (`SkillOrbit.tsx`).** 20 seats on three rings: pinned chips
-(`ORBIT_RINGS` in `skills.ts`) never change; the others take the next skill from the
-résumé-synced list each time they pass behind the portrait. Each chip is dark glass with
+**How sharply a canvas is drawn (`sharp.ts`, `spineBake.ts`, `ringBake.ts`).** A phone's
+chains are drawn at its screen's own resolution (spine 2.5, ring 2.75 pixels per CSS pixel;
+award room and no-photo pieces 2), anti-aliased. They used to be cut to 1–1.25 "for
+smoothness" — but what cost the GPU was the MATERIAL, worked out at every pixel (a thin
+film's rainbow, a clear coat, reflections, three lights): 10.1 ms a frame for the spine at
+full resolution, 1.2 ms without the bones. So on a phone the material is drawn once per
+theme, by the real `MeshPhysicalMaterial`, onto a small picture of every direction a surface
+can face, and a pixel looks itself up; the lights that move are still worked out live. The
+spine at 2.5× costs what it cost at 1× (3.4 ms against 3.5 on a laptop's chip), the ring
+2.7 against 2.1 (and its 22 draws are one). A desktop draws the materials themselves.
+`watchGpu()` times each canvas on the device (EXT_disjoint_timer_query_webgl2, else frame
+pacing) and steps its resolution down only if that device proves it cannot keep up,
+remembered in `localStorage`. `?sharp=spine:2,ring:1.5` sets it by hand and records the GPU
+times in `window.__sharp`. The spine's canvas on a phone is `100lvh` (with `dvh` it was
+remade each time the address bar slid away).
+
+**The orbit (`SkillOrbit.tsx`).** 20 seats on three rings, planned (`planOrbit`) from his
+list of skills — `copy.skills` (owner panel → Template: take any out, add any, ★ = always in
+sight; saved with his words) or, by default, the résumé's (`DEFAULT_ORBIT` in `skills.ts`).
+Pinned chips never change; the others take the next skill each time they pass behind the
+portrait. What he adds goes first in the list and takes a seat at once; names are 15 letters
+at most (longer ones collide on a phone); a short list has one seat per skill. Each chip is dark glass with
 the skill crisp in the middle and the cards' water only in a thin liquid rim round its
 edge (painted into the border — the owner found water behind the words unreadable). The
 orbit stops moving while it is off screen. The portrait's photos and their pace come
@@ -249,6 +276,19 @@ page reads `word(copy, key)` from DevContext; his changes live in `texts.json` (
 company, place, the menu's line, the finale's words, a title. Live as he types; one click
 puts every word back. A new editable text is one line in `copy.ts`.
 
+**The name's area (`Nameplate.tsx`, `plates.ts`, `PlateDesigns.tsx`).** HELLO I'M · the
+name · role and company · place and time, in the design chosen in the Template
+(`style.plate` in `texts.json`): Classic (the default, as it began) or nine others, loaded
+only when chosen — The page's water (the cards' own painted water in crystal-edged letters,
+standing on its surface, with drops, ripples and a moving reflection) · Stardust (grains
+that gather, scatter at a touch and come home) · Forged (struck letter by letter, white-hot
+to gold) · Liquid chrome · Neon sign (a pull chain switches it off) · Drafted (an engineer's
+drawing with true measurements) · Signal (tears and locks) · Departure board (split flaps,
+the clock turning every second) · Console (typed). The name is always real text: the drawn
+ones (`plateArt.ts`) lay ONE 2D canvas over it (`PlateName.tsx`, letters placed where the
+browser set them, `plateKit.ts`) — never WebGL; they idle at half rate, stop off screen,
+wait while a phone scrolls, and stand still for reduced motion.
+
 **Every letter answers the cursor (`letterSwell.ts`).** The letters under a
 hovering pointer are made transparent in place with a CSS Custom Highlight (its
 `::highlight` rule is added at run time — the build's CSS minifier drops it) and
@@ -272,9 +312,17 @@ cursor) and `CardChrome` (the slot a card's WebGL canvas goes into).
 in three tiers per id `pNN`: `full/` (1800px WebP), `thumb/` (720px) and a 24px
 LQIP inline in `album.json`. Tap the portrait to open it.
 
-**The award room (`app/award`, `AwardStage.tsx`, `chestBits.ts`).**
-three.js scene with the CC0 chest: strike it with the hammer, it cracks, shakes
-and bursts open; a "1 GRAM" gold coin rises in golden rays. The canvas stays
+**The award room (`app/award`, `AwardStage.tsx`, `chestBits.ts`, `awardFiles.ts`).**
+A real room (three.js): a photo-scanned chest and cross-pein hammer on a sandstone floor
+(Poly Haven, CC0; the chest's vertices quantized with KHR_mesh_quantization), studio
+environment light, VSM soft shadows, seen three-quarters. The hammer is held from your side,
+raised, and follows the mouse; a tap swings it down in 75 ms onto the spot tapped, and the
+blow's sound is SCHEDULED on the audio clock to be heard on that frame (the output latency
+taken off; every sound file starts at its own attack). Sparks, dust, a dent left in the
+wood, a dead stop, a recoil. The last blow: the lock snaps off and clanks to rest on its
+back, the lid bursts open, the gold inside lights up, coins leap out, bounce (each heard)
+and settle, light pours out, and the "1 GRAM" coin rises. Everything is drawn once unseen
+before the room appears, so the first blow has nothing to compile. The canvas stays
 hidden until its first full frame (no half-loaded flashes), the hammer lands on
 the sound, DPR is capped at 1.5. Its music is the owner's chosen track ("Ancient
 Empire" by The Mountain, 128 kbps) at `music/award-ancient-empire.mp3` in the
@@ -399,7 +447,8 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
 
 ## 11. Credits and licences
 
-- 3D chest: "pirate treasure chest" by dook, Poly Pizza, **CC0**.
+- 3D models and textures: Poly Haven, **CC0** — Treasure Chest (Rico Cilliers), Cross Pein
+  Hammer (Tics), Large Sandstone Blocks 01 (Rob Tuytel); see `public/dev/models/CREDITS.md`.
 - Sound effects: **Mixkit Free License** (see `public/dev/sfx/CREDITS.md`).
 - Fonts: Geist and Geist Mono (OFL), Fraunces (OFL), Cinzel (OFL).
 - Photos, résumé, rank list and personal text: © Pandian Sambath, all rights
