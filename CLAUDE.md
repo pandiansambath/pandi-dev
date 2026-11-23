@@ -243,6 +243,13 @@ remembered in `localStorage`. `?sharp=spine:2,ring:1.5` sets it by hand and reco
 times in `window.__sharp`. The spine's canvas on a phone is `100lvh` (with `dvh` it was
 remade each time the address bar slid away).
 
+**No opacity animation on a group inside a tilted card.** A group whose opacity may
+animate (even one whose animation has not begun) is drawn to a picture of its own first, and
+under a perspective transform the browser makes that picture at 1x: on a phone the first
+card's words, at rest on the first screen, came out with rows missing. That card's reveal
+animates transform only; `CardGL` marks it `data-away` as it starts to leave and a short
+transition fades the words.
+
 **The orbit (`SkillOrbit.tsx`).** 20 seats on three rings, planned (`planOrbit`) from his
 list of skills — `copy.skills` (owner panel → Template: take any out, add any, ★ = always in
 sight; saved with his words) or, by default, the résumé's (`DEFAULT_ORBIT` in `skills.ts`).
