@@ -197,8 +197,10 @@ before settling — opening like an iris when the spine first comes into view; t
 spine's core light rises out of its heart. The lane reaches `SPINE_HEAD` (130 px) above
 the column for it. THE BOTTOM: over the column's last 320 px the vertebrae break apart
 while interlocking links form among them, and the chain is lowered to just through the
-finale's surface — the lane's length below the column is MEASURED to `[data-surface]`
-(ChainSpine writes `data-tail`; a fixed figure fell short on a big screen). The
+finale's surface and on 40 px past it, so the last link crosses the line and fades
+below it — the lane's length below the column is MEASURED to `[data-surface]`
+(ChainSpine writes `data-tail`; a fixed figure fell short on a big screen). On a phone
+the portal is lifted 54 px, clear of the first card the spine stands behind. The
 finale's top is no border but a surface of light, the panel's glass and outline fading
 in below it; DustField draws rings spreading across it in perspective from where the
 chain dips in, and, while it is on screen, dust gathering from the air round the
@@ -216,7 +218,8 @@ context to spare there). The portrait's photos and their pace come from
 
 **The portrait's looks (`PortraitLooks.tsx`).** Natural · Graded (a tritone grade in
 the theme's depth and warm light over the photo's own colour, the room's two coloured
-lights falling on him) · Water (Graded under the cards' water) · Duotone · Noir. SVG
+lights falling on him) · Water (a cool, submerged grade in the theme's teal and violet,
+the cards' water drifting over him) · Duotone · Noir. SVG
 colour filters built from the live theme (a theme change regrades it); the adapted
 looks melt the photo's edge into the room. A change fades the old look over the new
 while a light passes across. Picked from a small button on the portrait's rim, from the
