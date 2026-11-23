@@ -134,14 +134,23 @@ the node; never while its menus are open. A phone shows the same items as thin l
 icons with nothing behind them. His name joins the PS mark only while the nameplate
 (`[data-hero-name]`) is off screen. No WebGL in it — see the next paragraph.
 
+**Smooth on a phone (measured, §101.9).** A mobile profile found the page saturated
+before any scroll: the chips' painted rim held a 51 KB data URL in a CSS custom property
+and 20 chips restyled through it every frame (~60 ms a chip). Rules that came out of it:
+never put a large value (a data URL) in a custom property on elements restyled per frame;
+write per-frame styles only when they change; never make or drop WebGL contexts while
+scrolling — the card pool is FIXED and WARM (3 on a phone, made during the intro, shaders
+compiled with `compileAsync`, handed out only when ready, never retired) and the finale's
+ring is built once in idle time and kept; a phone's canvases render at lower resolution;
+no layout reads inside a frame (cache positions); nothing repaints every frame (the
+name's sheen is still on touch screens).
+
 **A phone has only a few WebGL contexts (`glGuard.ts`).** Chrome on Android keeps
 about eight live WebGL contexts per page and, past that, kills the OLDEST — and
 paints the dead canvas WHITE with a broken-picture mark (his "white white boards").
 Reproduce with Chrome's `--max-active-webgl-contexts=8` at phone size. So: a phone's
-card pool is 4 canvases and gives one back while the finale's ring or the award room
-claims a context (`claimContext()`); the ring holds one only within ~1.6 screens of
-the finale (a fresh canvas each time — a canvas whose context was freed can never
-have another); the orbit's chips on a phone wear PAINTED water instead of a WebGL
+card pool is 3 canvases and gives one back while the award room or a no-photo portrait
+piece claims a context (`claimContext()`); the finale's ring is built once and kept; the orbit's chips on a phone wear PAINTED water instead of a WebGL
 canvas; the award room frees its context on close. Every WebGL canvas is guarded:
 taken away by the browser, it marks itself `data-gl-lost` (hidden by CSS — the dark
 ground shows, never white) and the card pool cuts its cap. Our own clean-ups free
