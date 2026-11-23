@@ -53,6 +53,7 @@ The mirror plays no music (see §8).
 app/
   page.tsx                 the profile (server component: loads the manifests, renders DevProfile)
   award/page.tsx           the award room: a real chest, hammer, gold, ancient score
+  error.tsx, award/error.tsx, global-error.tsx   what stands in when a page fails (never the framework's white page)
   api/dev-site/[...path]/  read-only file server over content/ (stand-in for the backend)
   layout.tsx, fonts/       Geist, Geist Mono, Fraunces (+ Cinzel for /award), all local
   globals.css              head (this repo) + the site's CSS (synced, dev-* namespaced)
@@ -337,6 +338,14 @@ bucket (`AWARD_TRACK` in `dev/music.ts`): it fades in to ~45%, loops, shares the
 site's mute, starts on the first tap if the browser holds sound back, and is
 fetched during the intro. Like the other songs it lives in S3, not in this repo.
 Its rank link opens page 35 of the university rank list PDF.
+
+It never ends in an error page (`chunks.ts`, `Medal.tsx`). Every lazily loaded piece comes
+through `arrive()`: if its code is missing — a page left open across a deploy — the page
+reloads itself ONCE, and if that does not help, a stand-in is shown (for the room: the plain
+medal). Graphics taken away, or a browser that died twice building the room (counted in
+`sessionStorage`), also end in the medal; after one death the room is built lighter. On the
+live site the previous build's hashed files stay on the server for one more deploy
+(`keep-last-static.mjs` in the monorepo).
 
 **Dates are always live.** Every number derived from time (years in the chain,
 months, days, the "3 YEARS IN …" countdown, the finale's day count) is computed

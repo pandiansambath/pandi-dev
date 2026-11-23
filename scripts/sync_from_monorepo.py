@@ -47,7 +47,14 @@ def main() -> None:
     copytree(FE / "public" / "dev", HERE / "public" / "dev")
     for font in ("geist.woff2", "geist-mono.woff2", "fraunces.woff2", "fraunces-italic.woff2", "cinzel.woff2"):
         copy(FE / "app" / "fonts" / font, HERE / "app" / "fonts" / font)
-    copy(FE / "app" / "award" / "page.tsx", HERE / "app" / "award" / "page.tsx")
+    # (And the rest of the award page's folder: its own error page.)
+    for f in (FE / "app" / "award").iterdir():
+        if f.is_file():
+            copy(f, HERE / "app" / "award" / f.name)
+    # What stands in when a page fails: the profile's (at the root here), and
+    # the last resort for every page.
+    copy(FE / "app" / "dev" / "error.tsx", HERE / "app" / "error.tsx")
+    copy(FE / "app" / "global-error.tsx", HERE / "app" / "global-error.tsx")
 
     # The profile page lives at / here (the monorepo serves it at /dev and
     # rewrites pandi-dev.dineai.cloud/ onto it). Its files come from this
