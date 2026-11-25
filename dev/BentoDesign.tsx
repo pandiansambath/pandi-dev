@@ -9,13 +9,14 @@
 // by one and lean towards the pointer with a moving glare. On a phone they
 // stack into one column, every tile intact.
 
-import Link from "next/link";
+import { AwardLink } from "./AwardLink";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
+import { chennaiTime, elapsed, useDev, useNow, usePortraits, useData } from "./context";
 import { ResumeActions } from "./designKit";
 import { MonthChain } from "./MonthChain";
-import { honours, PROJECT, VOLUNTEERING } from "./profile";
-import { CLUSTERS, DOCS, EDUCATION } from "./skills";
+import { honours } from "./profile";
+import { DOCS } from "./skills";
+import { useOpened } from "./stage";
 
 /** A tile that leans towards the pointer, with a glare that follows it. */
 function Tile({ className = "", i, children, onClick, label }: { className?: string; i: number; children: ReactNode; onClick?: () => void; label?: string }) {
@@ -36,7 +37,7 @@ function Tile({ className = "", i, children, onClick, label }: { className?: str
     ref.current?.style.setProperty("--ry", "0deg");
   };
   return (
-    <div className={`[perspective:1200px] ${className}`} style={entered ? { animation: `devTileIn .7s ${0.08 + i * 0.07}s cubic-bezier(.2,1.2,.3,1) both` } : { opacity: 0 }}>
+    <div className={`[perspective:1200px] ${className}`} style={entered ? { animation: `devTileIn .7s ${0.08 + i * 0.07}s cubic-bezier(.2,1.2,.3,1) both` } : undefined}>
       <div
         ref={ref}
         onPointerMove={move}
@@ -63,6 +64,7 @@ function Tile({ className = "", i, children, onClick, label }: { className?: str
 const LABEL = "font-mono text-[10px] tracking-[0.28em]";
 
 export function BentoDesign() {
+  const { CAREER_START, CLUSTERS, EDUCATION, EMAIL, LINKS, PROJECT, VOLUNTEERING } = useData();
   // His portrait photos and their pace, set in the owner panel (22 Nov).
   const PORTRAITS = usePortraits();
   const { interval } = useDev().portraits;
@@ -75,8 +77,9 @@ export function BentoDesign() {
   const [portrait, setPortrait] = useState(0);
 
   // The headline number counts up once, the first time the page opens.
+  const opened = useOpened();
   useEffect(() => {
-    if (!entered || !exp) return;
+    if (!entered || !opened || !exp) return;
     const target = Number(exp.decimal);
     const t0 = performance.now();
     let raf = 0;
@@ -88,7 +91,7 @@ export function BentoDesign() {
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per entry, not every clock tick
-  }, [entered, exp?.decimal]);
+  }, [entered, opened, exp?.decimal]);
 
   useEffect(() => {
     if (list.length < 2) return;
@@ -233,9 +236,9 @@ export function BentoDesign() {
             <a href={EDUCATION.verifyUrl} target="_blank" rel="noreferrer noopener" className="rounded-full border border-[var(--d-gold)]/50 px-2.5 py-1 text-[var(--d-gold)] hover:bg-[var(--d-gold)]/10">
               ✓ verify
             </a>
-            <Link href="/award" className="rounded-full border border-[var(--d-line2)] px-2.5 py-1 text-[var(--d-ink3)] hover:text-[var(--d-ink)]">
+            <AwardLink className="rounded-full border border-[var(--d-line2)] px-2.5 py-1 text-[var(--d-ink3)] hover:text-[var(--d-ink)]">
               open the award ✦
-            </Link>
+            </AwardLink>
           </div>
         </Tile>
 

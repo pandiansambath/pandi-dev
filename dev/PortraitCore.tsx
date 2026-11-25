@@ -27,12 +27,14 @@
 // One WebGL canvas (a phone claims its context first, so the card pool makes
 // room — glGuard), drawn while on screen; the pointer tilts it a little.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as THREE_NS from "three";
-import { claimContext, guardCanvas } from "./glGuard";
+import { claimContext, guardCanvas, quiet } from "./glGuard";
 import { pixelRatio } from "./sharp";
 import type { PortraitLook } from "./portraits";
+import { holder } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
+import { useComeBack } from "./useComeBack";
 
 type Three = typeof import("three");
 type Col = InstanceType<Three["Color"]>;
@@ -117,7 +119,7 @@ function star({ THREE, scene, pal, phone }: Ctx): Piece {
         col = mix(col, vec3(1.0, 0.96, 0.86), smoothstep(0.88, 1.0, heat));
         float mu = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
         col *= 0.3 + 0.8 * pow(mu, 0.6);
-        col += uCool * pow(1.0 - mu, 4.0) * 0.35;
+        col += uCool * pow(max(0.0, 1.0 - mu), 4.0) * 0.35;
         gl_FragColor = vec4(col * 1.05, 1.0);
       }`,
   });
@@ -518,12 +520,14 @@ function neural({ THREE, scene, pal, phone }: Ctx): Piece {
       attribute float along; attribute float seed; varying float vT; varying float vS; varying float vDepth;
       void main() { vT = along; vS = seed; vec4 mv = modelViewMatrix * vec4(position, 1.0); vDepth = clamp((mv.z + 7.0) / 1.8, 0.0, 1.0); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
       uniform float uT; uniform vec3 uC0, uC1, uHot; varying float vT; varying float vS; varying float vDepth;
       void main() {
         float win = floor(uT * 0.45 + vS * 7.0);
         float fire = step(0.72, fract(sin(vS * 91.7 + win * 12.9898) * 43758.5453));
         float head = fract(uT * (0.45 + vS * 0.5) + vS * 3.0);
-        float pulse = exp(-pow((vT - head) / 0.07, 2.0)) * fire;
+        float pulse = exp(-sq2((vT - head) / 0.07)) * fire;
         vec3 col = mix(uC1, uC0, vS);
         float a = (0.06 + 0.1 * vDepth) + pulse * 0.95;
         gl_FragColor = vec4(mix(col, uHot, pulse), a);
@@ -599,6 +603,8 @@ function blackhole({ THREE, scene, pal, phone }: Ctx): Piece {
     uniforms: U,
     vertexShader: QUAD_VERT,
     fragmentShader: NOISE + /* glsl */ `
+#define sq2(x) ((x) * (x))
+
       uniform float uT, uTilt; uniform vec3 uHot, uWarm, uCool; varying vec2 vUv;
       void main() {
         vec2 q = (vUv - 0.5) * 2.0;
@@ -620,9 +626,9 @@ function blackhole({ THREE, scene, pal, phone }: Ctx): Piece {
         float front = step(q.y, 0.0);
         // The far side, bent up over the top (and faintly under) by the gravity.
         vec2 dir = q / max(rr, 1e-4);
-        float lens = exp(-pow((rr - 0.31) / 0.055, 2.0)) * (0.55 + 0.45 * fbm2(dir * 3.0 + vec2(rr * 8.0 - uT * 0.5, 1.0)));
+        float lens = exp(-sq2((rr - 0.31) / 0.055)) * (0.55 + 0.45 * fbm2(dir * 3.0 + vec2(rr * 8.0 - uT * 0.5, 1.0)));
         lens *= smoothstep(-0.06, 0.22, q.y) + smoothstep(0.06, -0.24, q.y) * 0.32;
-        float photon = exp(-pow((rr - rH * 1.1) / 0.011, 2.0));
+        float photon = exp(-sq2((rr - rH * 1.1) / 0.011));
         float shadow = 1.0 - smoothstep(rH * 0.97, rH * 1.03, rr);
         vec3 col = vec3(0.0);
         float a = 0.0;
@@ -720,6 +726,11 @@ function makeEnv(THREE: Three, renderer: THREE_NS.WebGLRenderer, pal: Pal) {
 
 export function PortraitCore({ look }: { look: PortraitLook }) {
   const canvas = useRef<HTMLCanvasElement>(null);
+  // Never an empty place (§103.9): a still of the piece stands there until the
+  // piece itself is drawn — and again if a browser refuses it or takes it away,
+  // while it is asked for anew.
+  const { gen, gone } = useComeBack({ tries: 3, after: 1100 });
+  const [drawn, setDrawn] = useState(false);
   useEffect(() => {
     const el = canvas.current;
     const build = BUILD[look];
@@ -736,10 +747,15 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
       let renderer: THREE_NS.WebGLRenderer;
       try {
         renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance", premultipliedAlpha: true });
+        quiet(renderer);
       } catch {
+        gone();
         return;
       }
-      const unguard = guardCanvas(el);
+      const unguard = guardCanvas(el, () => {
+        setDrawn(false);
+        gone();
+      });
       renderer.setPixelRatio(pixelRatio("core", phone));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.setClearColor(0x000000, 0);
@@ -778,8 +794,16 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
       // The pointer tilts it a little.
       const tilt = { x: 0, y: 0 };
       const want = { x: 0, y: 0 };
+      // (Where it is: asked for now and then, not at every move.)
+      let box: DOMRect | null = null;
+      let asked = 0;
       const onMove = (e: PointerEvent) => {
-        const r = el.getBoundingClientRect();
+        const now = performance.now();
+        if (!box || now - asked > 350) {
+          asked = now;
+          box = el.getBoundingClientRect();
+        }
+        const r = box;
         want.x = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (window.innerWidth * 0.5)));
         want.y = Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height / 2)) / (window.innerHeight * 0.5)));
       };
@@ -789,11 +813,12 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
       let prev = performance.now();
       let raf = 0;
       let skip = false;
+      const hold = holder(4, 200);
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const dt = Math.min(0.05, (now - prev) / 1000);
         prev = now;
-        if (!visible || document.hidden) return;
+        if (!visible || document.hidden || hold()) return;
         // A phone draws every other frame.
         if (phone) {
           skip = !skip;
@@ -804,7 +829,12 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
         tilt.y += (want.y - tilt.y) * 0.05;
         piece.update(t, dt, tilt);
         renderer.render(scene, camera);
+        if (!shown && !renderer.getContext().isContextLost()) {
+          shown = true;
+          setDrawn(true);
+        }
       };
+      let shown = false;
       raf = requestAnimationFrame(loop);
       cleanup = () => {
         unguard();
@@ -819,18 +849,33 @@ export function PortraitCore({ look }: { look: PortraitLook }) {
         renderer.forceContextLoss();
       };
       if (dead) cleanup();
-    })();
+    })().catch(() => {
+      // (Code that did not come, a shader a phone will not build: the still stays.)
+    });
     return () => {
       dead = true;
       cleanup();
       unclaim();
+      setDrawn(false);
     };
-  }, [look]);
-  return <canvas ref={canvas} aria-hidden className="block h-full w-full" />;
+  }, [look, gen, gone]);
+  return (
+    <span className="relative block h-full w-full">
+      <span
+        aria-hidden
+        data-core-still={drawn ? undefined : ""}
+        className="absolute inset-[17%] transition-opacity duration-700"
+        style={{ opacity: drawn ? 0 : 1, transform: look === "blackhole" ? "rotate(-7deg)" : undefined, animation: drawn ? undefined : "devBreathe 5s ease-in-out infinite" }}
+      >
+        <CorePreview look={look} bare />
+      </span>
+      <canvas key={gen} ref={canvas} aria-hidden className="relative block h-full w-full" />
+    </span>
+  );
 }
 
 /** A small still for choosing a piece (the owner panel), in the theme's colours. */
-export function CorePreview({ look }: { look: PortraitLook }) {
+export function CorePreview({ look, bare = false }: { look: PortraitLook; bare?: boolean }) {
   const bg: Record<string, string> = {
     star: "radial-gradient(circle, #fff6e0 0 6%, var(--d-gold) 18%, var(--d-a2) 34%, color-mix(in srgb, var(--d-a) 60%, transparent) 44%, transparent 64%)",
     crystal: "conic-gradient(from 20deg, var(--d-c), var(--d-b2), var(--d-gold), var(--d-c), var(--d-b), var(--d-c))",
@@ -838,5 +883,5 @@ export function CorePreview({ look }: { look: PortraitLook }) {
     neural: "radial-gradient(circle, var(--d-b2) 0 2%, transparent 3%) 0 0 / 14px 14px, radial-gradient(circle, color-mix(in srgb, var(--d-c) 55%, transparent), transparent 70%)",
     blackhole: "radial-gradient(circle, #000 0 22%, var(--d-gold) 24%, transparent 27%), radial-gradient(ellipse 60% 14% at 50% 52%, var(--d-a2), transparent 70%), radial-gradient(circle, color-mix(in srgb, var(--d-a2) 45%, transparent) 30%, transparent 46%)",
   };
-  return <span className="block h-full w-full rounded-full bg-[var(--d-bg)]" style={{ background: bg[look] ?? "var(--d-bg2)", ...(look === "crystal" ? { clipPath: "polygon(50% 0, 66% 30%, 100% 38%, 72% 62%, 80% 100%, 50% 80%, 20% 100%, 28% 62%, 0 38%, 34% 30%)" } : {}) }} />;
+  return <span className={`block h-full w-full rounded-full ${bare ? "" : "bg-[var(--d-bg)]"}`} style={{ background: bg[look] ?? (bare ? "transparent" : "var(--d-bg2)"), ...(look === "crystal" ? { clipPath: "polygon(50% 0, 66% 30%, 100% 38%, 72% 62%, 80% 100%, 50% 80%, 20% 100%, 28% 62%, 0 38%, 34% 30%)" } : {}) }} />;
 }

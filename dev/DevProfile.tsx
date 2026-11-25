@@ -20,7 +20,8 @@ import { Album, type Photo } from "./Album";
 import { BootSequence, type BootTask } from "./BootSequence";
 import { primeSounds } from "./chestBits";
 import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player } from "./music";
-import { AWARD_MODEL_FILES, canWarmAward } from "./awardFiles";
+import { awardFiles, canWarmAward } from "./awardFiles";
+import { rememberWords } from "./awardDoor";
 import { arrive } from "./chunks";
 import { OwnerPanel } from "./OwnerPanel";
 import { PortraitLookDefs } from "./PortraitLooks";
@@ -32,6 +33,7 @@ import { installLetterSwell } from "./letterSwell";
 import { Gate, type Origin } from "./Popup";
 import { DEFAULT_MILESTONES, type Milestone } from "./profile";
 import { ResumeViewer, type ResumeManifest } from "./Resume";
+import { shutStage } from "./stage";
 import { DEFAULT_DESIGN, DEFAULT_THEME, findTheme, isDesign, themeStyle, THEME_EVENT, THEMES, type DesignId } from "./theme";
 import { Toast, TopBar } from "./TopBar";
 
@@ -97,6 +99,8 @@ export function DevProfile({
   copy: Copy;
 }) {
   const [entered, setEntered] = useState(false);
+  // The door, until its opening has played out (the page is there well before).
+  const [door, setDoor] = useState(true);
   const [now, setNow] = useState<Date | null>(null);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -282,7 +286,9 @@ export function DevProfile({
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
       const card = (e.target as Element | null)?.closest?.(".dev-card") as HTMLElement | null;
-      if (!card) return;
+      // (The chain's cards have that light in their own glass, CardGL: a property written on a
+      // card every frame is worked out again for everything on it, and a gradient painted.)
+      if (!card || card.closest('[data-design="chain"]')) return;
       const r = card.getBoundingClientRect();
       card.style.setProperty("--mx", `${e.clientX - r.left}px`);
       card.style.setProperty("--my", `${e.clientY - r.top}px`);
@@ -295,8 +301,15 @@ export function DevProfile({
   useEffect(() => {
     player?.setMode(albumOpen ? "album" : "landing");
   }, [albumOpen, player]);
-  // Leaving the page (e.g. for the award room, which has its own score).
-  useEffect(() => () => releasePlayer(), []);
+  // Leaving the page (e.g. for the award room, which has its own score): the door is
+  // shut behind him, until he comes back through it.
+  useEffect(
+    () => () => {
+      releasePlayer();
+      shutStage();
+    },
+    [],
+  );
 
   const ownerFetch = useCallback(async (path: string, init: { method: string; json?: object; form?: FormData }) => {
     if (!password.current) return null;
@@ -333,6 +346,9 @@ export function DevProfile({
     return installLetterSwell();
   }, [entered]);
 
+  // (The award room's words are his too: carried across with him.)
+  useEffect(() => rememberWords(copy), [copy]);
+
   const value: DevState = useMemo(
     () => ({
       entered,
@@ -362,6 +378,14 @@ export function DevProfile({
     [entered, album, portraits, portraitLook, setPortraitLook, copy, resume, milestones, openAlbum, openResume, unlocked, requestUnlock, saveMilestones, look, setTheme, setDesign, siteDefault, saveDefault, toast, openOwner, ownerFetch],
   );
 
+  // It opens by itself (§103.10): the page begins, all of it, while only a point of
+  // light can be seen; and the music, where the browser allows it without a touch.
+  const enter = useCallback(() => {
+    flushSync(() => setEntered(true));
+    getPlayer(initialMusic)?.wake();
+  }, [initialMusic]);
+  const leaveDoor = useCallback(() => setDoor(false), []);
+
   const thumbUrls = useMemo(() => photos.map((p) => `/api/dev-site/thumb/${p.id}.webp`), [photos]);
   // Everything else the visit will want, in the cache before the door opens.
   const bootTasks = useMemo<BootTask[]>(() => {
@@ -376,13 +400,16 @@ export function DevProfile({
       () => {
         const p = getPlayer(initialMusic);
         setPlayer(p);
+        // With the first touch, click or key anywhere, on the door too.
+        p?.arm();
         return p ? p.preload() : Promise.resolve();
       },
       // The award room: engine, loader, scene, model, and its sounds decoded.
       () => import("three"),
       () => import("three/examples/jsm/loaders/GLTFLoader.js"),
       () => import("./AwardStage"),
-      () => (canWarmAward() ? Promise.all(AWARD_MODEL_FILES.map((u) => fetch(u).then((r) => r.arrayBuffer()))) : Promise.resolve()),
+      () => import("./awardRoom"),
+      () => (canWarmAward() ? Promise.all(awardFiles().map((u) => fetch(u).then((r) => r.arrayBuffer()))) : Promise.resolve()),
       () => primeSounds(),
       // …and its music, into the browser's cache, so the room opens playing.
       () => fetch(AWARD_TRACK).then((r) => r.arrayBuffer()).catch(() => null),
@@ -400,16 +427,8 @@ export function DevProfile({
       >
         <div aria-hidden className="dev-progress" />
         <PortraitLookDefs />
-        {!entered && (
-          <BootSequence
-            photoUrls={thumbUrls}
-            tasks={bootTasks}
-            onEnter={() => {
-              setEntered(true);
-              // ENTER is the tap browsers require before any sound.
-              getPlayer(initialMusic)?.start();
-            }}
-          />
+        {door && (
+          <BootSequence photoUrls={thumbUrls} tasks={bootTasks} onEnter={enter} onDone={leaveDoor} />
         )}
         <TopBar player={player} />
 

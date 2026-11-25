@@ -306,6 +306,21 @@ async def test_songs_upload_reorder_and_refuse_strangers(client, uploads) -> Non
         "volume": 0.45,
     }
 
+    # How it begins: his choice, kept by a save that says nothing of it, and by a new song.
+    put = {"password": PASSWORD, "tracks": [track], "volume": 0.45}
+    r = await client.put("/api/dev-site/music", json={**put, "start": "button"})
+    assert r.status_code == 200 and r.json()["music"]["start"] == "button"
+    r = await client.put("/api/dev-site/music", json=put)
+    assert r.json()["music"]["start"] == "button"
+    r = await client.post(
+        "/api/dev-site/music",
+        data={"password": PASSWORD, "title": "Second", "scope": "both"},
+        files={"file": ("b.mp3", song, "audio/mpeg")},
+    )
+    assert r.json()["music"]["start"] == "button"
+    r = await client.put("/api/dev-site/music", json={**put, "start": "whenever"})
+    assert r.status_code == 422
+
 
 # ── His résumé, replaced from the owner panel ───────────────────────────────
 
@@ -402,8 +417,14 @@ async def test_his_words_for_the_site_save_and_reset(client, uploads) -> None:
     served = await client.get("/api/dev-site/texts.json")
     assert served.headers["cache-control"] == "no-store"
     assert served.json() == {"texts": body["texts"], "style": body["style"]}
-    # Not a field the page has, or far too long: refused.
-    for bad in ({"texts": {"<script>": "x"}}, {"texts": {"name": "x" * 601}}):
+    # Every word of the page, some of them emptied (§103.7).
+    many = {f"skill.k{i}.items": "a, b" for i in range(300)} | {"vol3Org": ""}
+    r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, "texts": many})
+    assert r.status_code == 200
+    assert (await client.get("/api/dev-site/texts.json")).json()["texts"] == many
+    # Not a field the page has, far too long, or far too many: refused.
+    too_many = {f"k{i}": "x" for i in range(481)}
+    for bad in ({"texts": {"<script>": "x"}}, {"texts": {"name": "x" * 601}}, {"texts": too_many}):
         r = await client.put("/api/dev-site/texts", json={"password": PASSWORD, **bad})
         assert r.status_code == 422, bad
     # One click, every word back.
@@ -462,6 +483,24 @@ async def test_the_portrait_keeps_his_default_look(client, uploads) -> None:
     assert saved["look"] == "aura" and saved["interval"] == 40
     r = await client.put("/api/dev-site/portrait", json={**body, "look": "sepia"})
     assert r.status_code == 422
+
+
+async def test_the_skills_go_round_him_at_the_pace_he_set(client, uploads) -> None:
+    """"make the movement [a] bit slower… or make it customisable" (24 Nov): saved with the
+    portrait, kept when left out, and only between still and twice as fast."""
+    body = {
+        "password": PASSWORD,
+        "photos": [{"id": "profile", "file": "profile.webp"}],
+        "interval": 30,
+    }
+    r = await client.put("/api/dev-site/portrait", json={**body, "pace": 0.6})
+    assert r.status_code == 200
+    assert r.json()["portrait"]["pace"] == 0.6
+    r = await client.put("/api/dev-site/portrait", json=body)
+    assert r.json()["portrait"]["pace"] == 0.6
+    for bad in (-0.1, 2.5, "fast"):
+        r = await client.put("/api/dev-site/portrait", json={**body, "pace": bad})
+        assert r.status_code == 422
 
 
 async def test_the_portrait_photos_upload_reorder_and_keep_their_pace(client, uploads) -> None:

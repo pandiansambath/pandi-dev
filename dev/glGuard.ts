@@ -16,14 +16,61 @@
 
 export const GL_LOST_EVENT = "dev-gl-lost";
 
+// How many have been taken in this page's life: the card pool may go down to one,
+// and what can be done without does not ask for its place again.
+let losses = 0;
+export function contextsLost(): number {
+  return losses;
+}
+
 export function guardCanvas(canvas: HTMLCanvasElement, onLost?: () => void): () => void {
   const lost = () => {
     canvas.dataset.glLost = "";
+    losses++;
     window.dispatchEvent(new Event(GL_LOST_EVENT));
     onLost?.();
   };
   canvas.addEventListener("webglcontextlost", lost);
   return () => canvas.removeEventListener("webglcontextlost", lost);
+}
+
+// Three asks the graphics about every shader the first time it is used (its log, its
+// shaders' logs), and the page stands still for each answer — 20–90 ms, in the middle of a
+// scroll. It is asked only when somebody is looking for a fault (?glcheck).
+export function quiet(renderer: { debug: { checkShaderErrors: boolean } }) {
+  renderer.debug.checkShaderErrors = /[?&]glcheck/.test(window.location.search);
+}
+
+// Its shaders, compiled off the main thread, and when they are ready. (three's own
+// compileAsync asks a program that is gone when the context is lost meanwhile, and throws
+// where nobody can catch it: QA, 24 Nov.)
+type Compiles = {
+  compile: (scene: never, camera: never) => unknown;
+  properties: { get: (m: never) => { currentProgram?: { isReady: () => boolean } } };
+  getContext: () => { isContextLost: () => boolean };
+};
+export function compiled(renderer: unknown, scene: unknown, camera: unknown): Promise<void> {
+  const r = renderer as Compiles;
+  return new Promise((done) => {
+    let left: unknown[] = [];
+    try {
+      left = [...(r.compile(scene as never, camera as never) as Iterable<unknown>)];
+    } catch {
+      done();
+      return;
+    }
+    const look = () => {
+      try {
+        if (!r.getContext().isContextLost()) left = left.filter((m) => !(r.properties.get(m as never).currentProgram?.isReady() ?? true));
+        else left = [];
+      } catch {
+        left = [];
+      }
+      if (left.length) window.setTimeout(look, 12);
+      else done();
+    };
+    window.setTimeout(look, 12);
+  });
 }
 
 // A canvas about to take a context of its own (the finale's ring, the award

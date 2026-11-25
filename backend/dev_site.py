@@ -199,7 +199,8 @@ async def save_texts(body: SaveTexts, request: Request) -> dict:
     if not enabled():
         raise HTTPException(404, "Not found")
     await run_in_threadpool(_authorise, request, body.password)
-    if len(body.texts) > 160 or len(body.style) > 16:
+    # (The Template reaches every word of the page, §103.7: 170 and counting.)
+    if len(body.texts) > 480 or len(body.style) > 16:
         raise HTTPException(422, "Too many fields.")
     for k, v in [*body.texts.items(), *body.style.items()]:
         if not _TEXT_KEY.match(k) or len(v) > 600:
@@ -344,11 +345,14 @@ class Track(BaseModel):
 class SaveMusic(Unlock):
     tracks: list[Track] = Field(max_length=40)
     volume: float = Field(ge=0, le=1)
+    # How it begins: by itself, at the visitor's first touch, or only by the music
+    # button ("a toggle button inside PS", 24 Nov). Not sent: as it was.
+    start: Literal["auto", "touch", "button"] | None = None
 
 
 @router.put("/music")
 async def save_music(body: SaveMusic, request: Request) -> dict:
-    """Order, titles, where each song plays, and the default volume."""
+    """Order, titles, where each song plays, the default volume, and how it begins."""
     if not enabled():
         raise HTTPException(404, "Not found")
     await run_in_threadpool(_authorise, request, body.password)
@@ -357,6 +361,9 @@ async def save_music(body: SaveMusic, request: Request) -> dict:
     if any(t.file not in known for t in body.tracks):
         raise HTTPException(422, "A song in the list was never uploaded.")
     manifest = {"tracks": [t.model_dump() for t in body.tracks], "volume": round(body.volume, 2)}
+    start = body.start or (current.get("start") if isinstance(current, dict) else None)
+    if start:
+        manifest["start"] = start
     await run_in_threadpool(_write, "music.json", manifest)
     return {"ok": True, "music": manifest}
 
@@ -515,7 +522,7 @@ async def upload_resume(
 #    interval — I need full customisation, like I can change photo, add
 #    photos, edit time interval" (22 Nov)
 #
-# portrait.json: {"photos": [{"id", "file"}], "interval": seconds, "look"?}.
+# portrait.json: {"photos": [{"id", "file"}], "interval": seconds, "look"?, "pace"?}.
 # "look" is the portrait's design on the site (23 Nov: "different kinds of
 # views… a complete change… blur the edges and show the face… gone to the
 # background, the skills rotating in front"): natural, aura, immersive,
@@ -600,6 +607,8 @@ class SavePortrait(Unlock):
     interval: int = Field(ge=3, le=3600)
     # Left out: the look already saved stays.
     look: str | None = Field(default=None, pattern=_LOOK_PATTERN)
+    # How fast his skills go round him (1: as it is). Left out: as saved.
+    pace: float | None = Field(default=None, ge=0, le=2)
 
 
 @router.put("/portrait")
@@ -617,6 +626,9 @@ async def save_portrait(body: SavePortrait, request: Request) -> dict:
     look = body.look if body.look is not None else current.get("look")
     if isinstance(look, str) and look in PORTRAIT_LOOKS:
         manifest["look"] = look
+    pace = body.pace if body.pace is not None else current.get("pace")
+    if isinstance(pace, int | float) and 0 <= pace <= 2:
+        manifest["pace"] = round(float(pace), 2)
     await run_in_threadpool(_write, "portrait.json", manifest)
     return {"ok": True, "portrait": manifest}
 

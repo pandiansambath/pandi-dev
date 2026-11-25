@@ -30,12 +30,13 @@
 // its background (§100.2).
 
 import { useEffect, useRef, useState } from "react";
-import { EMAIL, LINKS, useDev } from "./context";
+import { useDev, useData } from "./context";
 import { word } from "./copy";
 import { IconCopy, IconDoc, IconGitHub, IconInstagram, IconLinkedIn, IconMail, IconPalette } from "./icons";
 import type { Player } from "./music";
 import { originOf, type Origin } from "./Popup";
 import { SoundControl } from "./SoundControl";
+import { useOpened } from "./stage";
 import { Studio } from "./Studio";
 import { Wave } from "./flourish";
 
@@ -126,7 +127,14 @@ function useTucked(): [boolean, () => void] {
   useEffect(() => {
     let last = window.scrollY;
     let run = 0;
+    // (Asked when the frame is done: in the middle of one, the question alone makes the
+    // browser work the whole page out on the spot.)
+    let due = 0;
     const onScroll = () => {
+      if (!due) due = window.setTimeout(look, 0);
+    };
+    const look = () => {
+      due = 0;
       const y = window.scrollY;
       const dy = y - last;
       last = y;
@@ -147,6 +155,7 @@ function useTucked(): [boolean, () => void] {
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pointermove", onMove, { passive: true });
     return () => {
+      window.clearTimeout(due);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onMove);
     };
@@ -161,6 +170,7 @@ const WORD = "hidden font-mono text-[10.5px] font-medium tracking-[0.24em] lg:in
 const GLYPH = "lg:hidden";
 
 export function TopBar({ player }: { player: Player | null }) {
+  const { EMAIL, LINKS } = useData();
   const { entered, resume, openResume, toast, openOwner, designId, copy } = useDev();
   const [studio, setStudio] = useState<Origin | false>(false);
   const [soundOpen, setSoundOpen] = useState(false);
@@ -192,12 +202,15 @@ export function TopBar({ player }: { player: Player | null }) {
 
   // The order the words arrive in (and decrypt).
   const d = (i: number) => 0.18 + i * 0.08;
-  const fade = (i: number) => (entered ? { animation: `devFadeUp .6s ${d(i)}s cubic-bezier(.2,.8,.2,1) backwards` } : { opacity: 0 });
+  const fade = (i: number) => (entered ? { animation: `devFadeUp .6s ${d(i)}s cubic-bezier(.2,.8,.2,1) backwards` } : undefined);
+  // (They decrypt when they can be seen, not behind the door: §103.10.)
+  const opened = useOpened();
+  const begun = entered && opened;
 
   return (
     <>
       <header data-tucked={tucked ? "" : undefined} className="dev-topbar pointer-events-none fixed inset-x-0 top-0 z-40">
-        <div className="dev-topbar-inner relative mx-auto flex h-[64px] max-w-6xl items-center gap-3 px-4 sm:h-[72px] sm:px-6">
+        <div className="dev-topbar-inner relative mx-auto flex h-[64px] max-w-6xl items-center xl:max-w-[76rem] gap-3 px-4 sm:h-[72px] sm:px-6">
           <div className="pointer-events-auto flex min-w-0 items-center gap-3">
             <a
               href="#top"
@@ -228,25 +241,25 @@ export function TopBar({ player }: { player: Player | null }) {
             <button type="button" onClick={copyEmail} className={`${ITEM} w-9 lg:w-auto`} style={fade(2)} aria-label="Copy email address">
               <IconMail className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text="MAIL" start={entered} delay={d(2)} />
+                <Decrypt text={word(copy, "navMail")} start={begun} delay={d(2)} />
               </span>
             </button>
             <a href={LINKS.linkedin} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(3)} aria-label="LinkedIn">
               <IconLinkedIn className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text="LINKEDIN" start={entered} delay={d(3)} />
+                <Decrypt text={word(copy, "navLinkedin")} start={begun} delay={d(3)} />
               </span>
             </a>
             <a href={LINKS.github} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(4)} aria-label="GitHub">
               <IconGitHub className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text="GITHUB" start={entered} delay={d(4)} />
+                <Decrypt text={word(copy, "navGithub")} start={begun} delay={d(4)} />
               </span>
             </a>
             <a href={LINKS.instagram} target="_blank" rel="noopener noreferrer" className={`${ITEM} w-9 lg:w-auto`} style={fade(5)} aria-label="Instagram">
               <IconInstagram className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text="INSTAGRAM" start={entered} delay={d(5)} />
+                <Decrypt text={word(copy, "navInstagram")} start={begun} delay={d(5)} />
               </span>
             </a>
             {resume && (
@@ -259,7 +272,7 @@ export function TopBar({ player }: { player: Player | null }) {
               >
                 <IconDoc className={GLYPH} width={18} height={18} />
                 <span className={WORD}>
-                  <Decrypt text="RÉSUMÉ" start={entered} delay={d(6)} />
+                  <Decrypt text={word(copy, "navResume")} start={begun} delay={d(6)} />
                 </span>
               </button>
             )}
@@ -272,7 +285,7 @@ export function TopBar({ player }: { player: Player | null }) {
             >
               <IconPalette className={GLYPH} width={18} height={18} />
               <span className={WORD}>
-                <Decrypt text="THEMES" start={entered} delay={d(7)} />
+                <Decrypt text={word(copy, "navThemes")} start={begun} delay={d(7)} />
               </span>
             </button>
           </nav>

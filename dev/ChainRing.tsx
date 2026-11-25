@@ -30,8 +30,9 @@
 // back on the way out, and stands still — forged — for reduced motion.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { atLeisure } from "./stage";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas } from "./glGuard";
+import { compiled, guardCanvas, quiet } from "./glGuard";
 import { bakedRing } from "./ringBake";
 import { pixelRatio, watchGpu } from "./sharp";
 
@@ -80,13 +81,26 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
     // setup (the links, the reflections) is the one long task left, and it
     // should not land mid-scroll (§101.9).
     const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
-    const early = window.setTimeout(() => {
-      if (w.requestIdleCallback) w.requestIdleCallback(() => setNear(true), { timeout: 4000 });
+    // (While the page loads, or well after it has opened — not in the opening; a phone
+    // after it always, so that the two are not alive at once: it keeps few. And not while
+    // the page is being scrolled.)
+    let scrolled = -1e9;
+    let again = 0;
+    const onScroll = () => {
+      scrolled = performance.now();
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    const ask = () => {
+      if (performance.now() - scrolled < 800) again = window.setTimeout(ask, 300);
+      else if (w.requestIdleCallback) w.requestIdleCallback(() => setNear(true), { timeout: 4000 });
       else setNear(true);
-    }, 5000);
+    };
+    const offEarly = atLeisure(ask, window.matchMedia("(max-width: 767px)").matches ? 600_000 : 3200);
     return () => {
       io.disconnect();
-      window.clearTimeout(early);
+      offEarly();
+      window.clearTimeout(again);
+      window.removeEventListener("scroll", onScroll);
     };
   }, []);
 
@@ -105,6 +119,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       // Anti-aliased on a phone too (§102.7): without it, and at 1.25 pixels per
       // CSS pixel, the links' edges broke into white steps on his screen.
       const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: true, alpha: true, powerPreference: "high-performance" });
+      quiet(renderer);
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
       renderer.setPixelRatio(pixelRatio("ring", phone));
@@ -289,7 +304,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
           varying float vPick;
           void main() {
             float k = clamp((uShow - seed.x) / 0.4, 0.0, 1.0);
-            float e = 1.0 - pow(1.0 - k, 3.0);
+            float e = 1.0 - pow(max(0.0, 1.0 - k), 3.0);
             // Up from below, swirling round the ring's axis, onto its link.
             vec3 p = mix(position, target, e);
             float swirl = (1.0 - e) * (3.2 + seed.y * 2.6);
@@ -565,7 +580,7 @@ export function ChainRing({ children, onAssembled }: { children: ReactNode; onAs
       };
       // Its shaders compiled in the background before the first frame draws…
       try {
-        await renderer.compileAsync(scene, camera);
+        await compiled(renderer, scene, camera);
       } catch {
         /* drawn (and compiled) on its first frame instead */
       }

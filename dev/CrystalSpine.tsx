@@ -8,10 +8,11 @@
 //   "see how these come when I scroll… like in movies when superheroes show
 //    their full power, all moving from down into the air"
 //
-// A column of vertebrae grown in 3D: lumpy rounded bodies with wings and a
-// spur, thin discs between them, crystal shards and thorns breaking out of
-// the bone — dark glass under a film of rainbow (iridescence and a clear coat
-// over a room's reflections), lit from either side by the theme's colours.
+// A column of real vertebrae (§103.6, spineBone.ts: "so natural, detailed and
+// wholesome, with a crystal-clear skeleton… ours is a bit small"), crystal discs
+// between them — dark glass under a film of rainbow (iridescence and a clear coat
+// over a room's reflections), lit from either side by the theme's colours and from
+// within by the cord's light, shining through wherever the bone is thin.
 // The column twists as it climbs and turns as you scroll. The part you have
 // read past glows a little (the chain reaction, lighting card by card), and
 // every scroll sends a surge of light up the bone.
@@ -39,6 +40,9 @@
 // into the column. It opens when the spine first comes into view. The
 // beginning answers the end: a portal at the top, the pool of light below.
 //
+// THE CARDS' BALLS (24 Nov, §106.13): each card, wound up into its ball, comes to the skeleton
+// and goes into it (spineGuests); the next comes out of it.
+//
 // One small WebGL canvas, sticky in the divider's lane (ChainSpine): it stays
 // on screen while the column passes and draws only while it is on screen.
 // The lane reaches SPINE_HEAD px above the column (the portal) and, below it,
@@ -46,18 +50,25 @@
 // The vertebrae are laid out in the column's own coordinates, so they travel
 // with the page, and the spine grows out of nothing at the column's two ends.
 
-import type { BufferGeometry } from "three";
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas } from "./glGuard";
+import { compiled, guardCanvas, quiet } from "./glGuard";
 import { BURST, burstGalaxy } from "./GalaxyBurst";
 import { pixelRatio, watchGpu } from "./sharp";
+import { atLeisure, covered, holder, setHeart, whenOpen } from "./stage";
+import { pageY, pageYFree } from "./scrollPos";
+import { useComeBack } from "./useComeBack";
 import { bakedSpine } from "./spineBake";
+import { BONE_AXIS, BONE_PITCH, BONE_UNIT, boneGrain, crystalDisc, loadBone, loadBroken, splinters } from "./spineBone";
+import { boneLife, BREAK, breakLight, makePowder, tremble, type Powder } from "./spineBreak";
+import { GUESTS, guestUniforms, makeGuests } from "./spineGuests";
+import { host } from "./guests";
+import { makeNerves } from "./spineNerves";
+import { playBreak } from "./spineSound";
 
-/** One vertebra every STEP px down the column. */
-const STEP = 17;
-/** Bone, disc, thorned bone, disc, bone, disc, crystal cluster, disc. */
-const PATTERN = [0, 1, 2, 1, 0, 1, 3, 1];
+/** A vertebra's unit (half its body's width), in CSS px: with the cards either side
+ *  of a desktop's column, and behind the cards on a phone. */
+const boneSize = () => (window.matchMedia("(min-width: 1280px)").matches ? 39 : window.matchMedia("(min-width: 1024px)").matches ? 29 : 45);
 
 /** How far the lane — and the chain — reach below the column: across the gap
  *  (the finale's top margin: 48 px, 64 px from sm) and just through its
@@ -82,9 +93,20 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
   const canvas = useRef<HTMLCanvasElement>(null);
   // The easter egg (§102.5): where the galaxy's heart is on the screen, its
   // colours, and when it was last touched — shared with the render loop.
-  const heartAt = useRef({ x: 0, y: 0, r: 100, ok: false });
+  const heartAt = useRef({ x: 0, y: 0, r: 100, ok: false, here: false });
+  // (The opening's dust comes home to it: §103.10.)
+  useEffect(() => {
+    setHeart(() => (heartAt.current.here ? heartAt.current : null));
+    return () => setHeart(null);
+  }, []);
   const tint = useRef<{ cols: [number, number, number][]; light: boolean }>({ cols: [], light: false });
   const burstAt = useRef(-1);
+  // The skeleton itself, touched (§104.3): where (on the screen), and when it broke; and
+  // the cursor near it.
+  const hit = useRef({ x: 0, y: 0, wait: false, at: -1 });
+  const near = useRef({ y: 0, on: false });
+  // Taken away by a browser that keeps few contexts: asked for again (§103.9).
+  const { gen, gone } = useComeBack({ tries: 2, after: 2400 });
 
   useEffect(() => {
     const el = canvas.current;
@@ -94,18 +116,19 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
     let cleanup = () => {};
     (async () => {
       const THREE = await import("three");
-      const { mergeGeometries, mergeVertices } = await import("three/examples/jsm/utils/BufferGeometryUtils.js");
       if (dead) return;
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const wide = window.matchMedia("(min-width: 1024px)");
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: true, powerPreference: "high-performance" });
+
+      quiet(renderer);
       // Taken away by the browser (a phone's few contexts): hide, never white.
-      const unguard = guardCanvas(el);
+      const unguard = guardCanvas(el, gone);
       // The screen's own resolution on a phone too (§102.7; it was 1×).
       renderer.setPixelRatio(pixelRatio("spine", !wide.matches));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 0.95;
+      renderer.toneMappingExposure = 1.02;
       const scene = new THREE.Scene();
       // What the glass reflects: not a bright room (that turned the bones to
       // white porcelain — every curve catches a white rim) but the dark, with
@@ -135,87 +158,22 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const FOV = 28;
       const camera = new THREE.PerspectiveCamera(FOV, 1, 1, 10000);
 
-      // ── The bones (built once) ────────────────────────────────────────
-      type Geo = BufferGeometry;
-      const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-      // A smooth, lumpy body: an icosphere pushed in and out by a few waves.
-      const blob = (detail: number, sx: number, sy: number, sz: number, s: number, rough = 0.2): Geo => {
-        let g: Geo = new THREE.IcosahedronGeometry(1, detail);
-        g.deleteAttribute("normal");
-        g.deleteAttribute("uv");
-        g = mergeVertices(g);
-        const p = g.getAttribute("position");
-        for (let i = 0; i < p.count; i++) {
-          const x = p.getX(i);
-          const y = p.getY(i);
-          const z = p.getZ(i);
-          const n = 1 + rough * Math.sin(x * 3.1 + s) * Math.sin(y * 2.7 + s * 1.7) * Math.sin(z * 3.3 + s * 0.6) + rough * 0.4 * Math.sin(x * 6.3 + y * 5.1 + z * 4.2 + s * 2.3);
-          p.setXYZ(i, x * n * sx, y * n * sy, z * n * sz);
-        }
-        g.computeVertexNormals();
-        return g.toNonIndexed();
-      };
-      // A crystal shard: a long octahedron, cut in facets.
-      const shard = (len: number, w: number): Geo => {
-        const g: Geo = new THREE.OctahedronGeometry(1, 0);
-        g.deleteAttribute("uv");
-        g.scale(w, len, w);
-        g.translate(0, len * 0.55, 0);
-        g.computeVertexNormals();
-        return g;
-      };
-      // A thorn: a five-sided cone, faceted, its base at the origin.
-      const thorn = (len: number, r: number): Geo => {
-        let g: Geo = new THREE.ConeGeometry(r, len, 5, 1);
-        g.deleteAttribute("uv");
-        g = g.toNonIndexed();
-        g.translate(0, len / 2, 0);
-        g.computeVertexNormals();
-        return g;
-      };
-      const at = (g: Geo, pos: InstanceType<typeof THREE.Vector3>, rx = 0, ry = 0, rz = 0): Geo =>
-        g.applyMatrix4(new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(1, 1, 1)));
-      const toward = (g: Geo, from: InstanceType<typeof THREE.Vector3>, dir: InstanceType<typeof THREE.Vector3>): Geo =>
-        g.applyMatrix4(new THREE.Matrix4().compose(from, new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.normalize()), V(1, 1, 1)));
-
-      const variants: Geo[] = [
-        // A vertebra: the body, two wings reaching out and up, a spur behind,
-        // and crystal breaking through.
-        mergeGeometries([
-          blob(3, 16, 9, 13, 1.3),
-          at(blob(2, 12, 3.6, 5, 2.1), V(17, 1.5, -2), 0, 0, -0.22),
-          at(blob(2, 12, 3.6, 5, 2.7), V(-17, 1.5, -2), 0, 0, 0.22),
-          at(blob(2, 4, 4, 11, 3.3), V(0, -2, -14), 0.4, 0, 0),
-          toward(shard(9, 2.2), V(6, 5, 7), V(0.5, 0.9, 0.4)),
-          toward(shard(7, 1.8), V(-8, 4, 6), V(-0.6, 0.8, 0.3)),
-        ]),
-        // A disc between the bones, crystals round its rim.
-        mergeGeometries([
-          blob(2, 14, 3.2, 11.5, 4.4, 0.1),
-          toward(shard(5, 1.4), V(12, 0, 3), V(1, 0.3, 0.2)),
-          toward(shard(4.5, 1.3), V(-11, 0, -4), V(-1, 0.2, -0.3)),
-          toward(shard(5.5, 1.5), V(2, 0, 10), V(0.2, 0.3, 1)),
-          toward(shard(4, 1.2), V(-3, 0, -10), V(-0.1, 0.4, -1)),
-        ]),
-        // A bone with thorns.
-        mergeGeometries([
-          blob(3, 14.5, 8.5, 12.5, 5.5),
-          toward(thorn(21, 2.2), V(-11, 3, 3), V(-0.9, 0.35, 0.3)),
-          toward(thorn(17, 2), V(11, 4, -2), V(0.85, 0.5, -0.2)),
-          toward(thorn(15, 1.8), V(1, 2, -11), V(0.1, 0.4, -1)),
-          toward(shard(8, 2), V(4, 6, 8), V(0.3, 1, 0.5)),
-          toward(shard(6, 1.7), V(-5, -5, 7), V(-0.4, -0.8, 0.5)),
-        ]),
-        // A druse: a small core with crystals bursting out of it.
-        mergeGeometries([
-          blob(2, 9, 6, 8, 6.6),
-          toward(shard(14, 2.4), V(3, 2, 2), V(0.7, 0.8, 0.3)),
-          toward(shard(12, 2.2), V(-3, 2, 1), V(-0.8, 0.7, 0.2)),
-          toward(shard(15, 2.5), V(0, 3, -3), V(0.1, 0.9, -0.6)),
-          toward(shard(10, 2), V(2, -2, 4), V(0.5, -0.4, 0.9)),
-          toward(shard(11, 2.1), V(-2, -1, -4), V(-0.4, -0.3, -1)),
-        ]),
-      ];
+      // ── The bones (modelled offline, in two finenesses: triangles much smaller
+      // than a few pixels cost the GPU the same pixels several times over) ──
+      const big = wide.matches;
+      const coarse = big && renderer.getPixelRatio() < 1.6;
+      const [boneA, boneB] = await Promise.all((coarse ? ["a", "b"] : ["a_s", "b_s"]).map((n) => loadBone(THREE, `/dev/spine/bone_${n}.bin`).catch(() => null)));
+      if (dead) {
+        unguard();
+        pmrem.dispose();
+        renderer.dispose();
+        renderer.forceContextLoss();
+        return;
+      }
+      const discGeo = crystalDisc(THREE, big);
+      // (Should a bone not come, its place is a disc's.)
+      const variants = [boneA ?? discGeo, boneB ?? boneA ?? discGeo, discGeo];
+      const grain = boneGrain(THREE);
 
       // Dark glass, not chrome: little metal, a thin film that throws rainbow
       // at the edges, a modest room in it — the white came from a bright room
@@ -256,10 +214,10 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           .replace("#include <common>", "#include <common>\nvarying float vWy;\nuniform float uLine, uLit, uPulseY, uPulse;\nuniform vec3 uLitCol, uPulseCol;")
           .replace(
             "#include <emissivemap_fragment>",
-            "#include <emissivemap_fragment>\n  float litAbove = smoothstep(uLine - 40.0, uLine + 40.0, vWy);\n  float surge = exp(-pow((vWy - uPulseY) / 34.0, 2.0)) * uPulse;\n  totalEmissiveRadiance += uLitCol * litAbove * uLit + uPulseCol * surge;",
+            "#include <emissivemap_fragment>\n  float litAbove = smoothstep(uLine - 40.0, uLine + 40.0, vWy);\n  float past = (vWy - uPulseY) / 34.0;\n  float surge = exp(-past * past) * uPulse;\n  totalEmissiveRadiance += uLitCol * litAbove * uLit + uPulseCol * surge;",
           );
       };
-      const CAP = Math.ceil(2200 / STEP) + 4;
+      const CAP = Math.ceil(2600 / (29 * BONE_PITCH)) + 6;
       // Light from either side in the theme's colours, drifting up and down
       // the bone so the rainbow on it never stands still.
       const keyA = new THREE.PointLight(0xffffff, 2.4, 0, 0);
@@ -279,18 +237,92 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       });
       const tintDark = new THREE.Color(0.08, 0.08, 0.12);
       const tintBright = new THREE.Color(0.8, 0.95, 0.92);
-      // A phone, at its full resolution: the materials worked out once a theme
-      // (spineBake), not at every pixel of every bone — a third of the GPU's
-      // time for the same look (§102.7).
-      const baked = wide.matches ? null : bakedSpine(THREE, renderer, { bone, link: linkMat, glow, lights: { a: keyA, b: keyB, rim }, tints: { dark: tintDark, bright: tintBright }, room: () => envTex });
+      // The materials worked out once a theme (spineBake), not at every pixel of
+      // every bone — a third of the GPU's time for the same look (§102.7), which
+      // is what their detail is paid with.
+      const inner = { value: new THREE.Color(0.5, 0.95, 0.88) };
+      const innerBase = new THREE.Color();
+      const nearU = { uNearY: { value: 0 }, uNear: { value: 0 } };
+      const blast = { uBlast: { value: new THREE.Vector3() }, uUnit: { value: 39 }, uFall: { value: 24 } };
+      const inIt = still ? null : { uniforms: guestUniforms(THREE), many: GUESTS };
+      const baked = bakedSpine(THREE, renderer, { guests: inIt ?? undefined, bone, link: linkMat, glow, lights: { a: keyA, b: keyB, rim }, tints: { dark: tintDark, bright: tintBright }, room: () => envTex, grain, inner, near: nearU, blast, fine: big });
       const meshes = variants.map((g) => {
-        const m = new THREE.InstancedMesh(g, baked?.bone ?? bone, CAP);
+        const m = new THREE.InstancedMesh(g, baked.bone, CAP);
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         m.count = 0;
         m.frustumCulled = false;
         scene.add(m);
         return m;
       });
+
+      // ── What runs through it besides bone (§104.2) ──
+      const nerves = makeNerves(THREE, CAP, inIt ?? undefined);
+      scene.add(nerves.mesh);
+      let nNerves = 0;
+
+      // ── The bones in pieces (§104.3): fetched when the page is at leisure, or when one is
+      // first touched; the powder that flies with them ──
+      const BCAP = BREAK.reach * 2 + 6;
+      const SPLINTERS = 2;
+      let broken: { mesh: InstanceType<typeof THREE.InstancedMesh>; life: InstanceType<typeof THREE.InstancedBufferAttribute>; seed: InstanceType<typeof THREE.InstancedBufferAttribute>; n: number; many: number }[] | null = null;
+      let powder: Powder | null = null;
+      let asked = false;
+      const getBroken = async () => {
+        if (asked || dead || still) return;
+        asked = true;
+        const got = await Promise.all((big ? ["a", "b"] : ["a_s", "b_s"]).map((n) => loadBroken(THREE, `/dev/spine/break_${n}.bin`).catch(() => null)));
+        if (dead || !got[0] || !got[1]) {
+          got.forEach((g) => g?.geo.dispose());
+          // (Not here: this touch is let go, the next one asks again.)
+          hit.current.wait = false;
+          asked = dead;
+          return;
+        }
+        const made = [got[0], got[1], splinters(THREE, wide.matches ? 20 : 12)].map((g, i) => {
+          const { geo, cents } = g!;
+          const many = BCAP * (i === SPLINTERS ? 2 : 1);
+          const life = new THREE.InstancedBufferAttribute(new Float32Array(many * 4), 4);
+          const seed = new THREE.InstancedBufferAttribute(new Float32Array(many), 1);
+          life.setUsage(THREE.DynamicDrawUsage);
+          seed.setUsage(THREE.DynamicDrawUsage);
+          geo.setAttribute("aLife", life);
+          geo.setAttribute("aSeed", seed);
+          const mesh = new THREE.InstancedMesh(geo, baked.broken(cents), many);
+          mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          mesh.frustumCulled = false;
+          mesh.count = 0;
+          mesh.visible = false;
+          scene.add(mesh);
+          return { mesh, life, seed, n: 0, many };
+        });
+        const dust = makePowder(THREE, !wide.matches);
+        scene.add(dust.object);
+        powder = dust;
+        paintPowder();
+        await compiled(renderer, scene, camera);
+        if (!dead) broken = made;
+      };
+      let paintPowder = () => {};
+      const offLeisure = atLeisure(() => void getBroken(), 600_000);
+      // While it breaks its canvas is the whole screen (the pieces fly past its lane), over
+      // the cards; else only the lane. (Making a drawing surface another size stops the page
+      // for a moment: in the moment it is struck, that is the blow.)
+      let spread = false;
+      const widen = (on: boolean) => {
+        const host = el.parentElement;
+        const wrap = el.closest<HTMLElement>("[data-spine]");
+        if (!host || spread === on) return;
+        spread = on;
+        const r = host.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        // (As wide as the furthest piece flies.)
+        const full = Math.min(1240, wide.matches ? Math.ceil(2 * Math.max(cx, window.innerWidth - cx)) : window.innerWidth);
+        el.style.width = on ? `${full}px` : "";
+        el.style.marginLeft = on ? `${(r.width - full) / 2}px` : "";
+        if (wrap) wrap.style.zIndex = on && wide.matches ? "30" : "";
+        fit();
+      };
+      const struck = { t: -1, k: 0, y: 0, x: 0, surged: false };
 
       // ── The chain the skeleton becomes ──
       class Stadium extends THREE.Curve<InstanceType<typeof THREE.Vector3>> {
@@ -321,7 +353,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       const linkGeo = new THREE.TubeGeometry(new Stadium(9.5, 10.5), 64, 3.4, 12, true);
       // Room for a long measured tail (a tall screen's gap to the finale).
       const LCAP = Math.ceil((MORPH + 560 + 120) / LINK_PITCH) + 4;
-      const chainLinks = new THREE.InstancedMesh(linkGeo, baked?.link ?? linkMat, LCAP);
+      const chainLinks = new THREE.InstancedMesh(linkGeo, baked.link, LCAP);
       chainLinks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       chainLinks.setColorAt(0, new THREE.Color(1, 1, 1));
       chainLinks.count = 0;
@@ -342,7 +374,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         blending: THREE.AdditiveBlending,
         // uTop: the column's top (scene y) — the light rises out of the
         // portal's heart there, not through it.
-        uniforms: { uCol: { value: new THREE.Color(0.5, 0.95, 0.88) }, uGain: { value: 0.5 }, uH: { value: 1000 }, uTop: { value: 1e5 }, uPulseY: glow.uPulseY, uPulse: glow.uPulse },
+        uniforms: { uCol: { value: new THREE.Color(0.5, 0.95, 0.88) }, uGain: { value: 0.5 }, uH: { value: 1000 }, uTop: { value: 1e5 }, uPulseY: glow.uPulseY, uPulse: glow.uPulse, ...inIt?.uniforms },
+        defines: (inIt ? { GUESTS: `${GUESTS}` } : {}) as Record<string, string>,
         vertexShader: /* glsl */ `
           varying vec2 vP;
           varying float vY;
@@ -352,23 +385,50 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }`,
         fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           uniform vec3 uCol;
           uniform float uGain, uH, uTop, uPulseY, uPulse;
+          #ifdef GUESTS
+          uniform vec4 uG[GUESTS], uGc[GUESTS], uGd[GUESTS];
+          #endif
           varying vec2 vP;
           varying float vY;
           void main() {
-            float across = exp(-vP.x * vP.x / 18.0);
+            float across = exp(-vP.x * vP.x / 26.0) + 0.16 * exp(-vP.x * vP.x / 420.0);
             float ends = smoothstep(-uH * 0.5, -uH * 0.5 + 120.0, vP.y) * (1.0 - smoothstep(uH * 0.5 - 120.0, uH * 0.5, vP.y));
             float below = 1.0 - smoothstep(uTop - 12.0, uTop + 36.0, vY);
-            float surge = exp(-pow((vP.y - uPulseY) / 60.0, 2.0)) * uPulse;
-            gl_FragColor = vec4(uCol, across * ends * below * (uGain + surge * 1.4));
+            float surge = exp(-sq2((vP.y - uPulseY) / 60.0)) * uPulse;
+            float al = across * ends * below * (uGain + surge * 1.4);
+            vec3 c = uCol;
+            #ifdef GUESTS
+            // (What has gone into the bones shines in their gaps as it runs.)
+            vec3 more = vec3(0.0);
+            for (int i = 0; i < GUESTS; i++) if (uG[i].w > 0.5) {
+              float tall = abs(vY - uG[i].y) / uG[i].w;
+              float here = smoothstep(uGd[i].w + 0.4, uGd[i].w - 0.6, tall);
+              more += uGc[i].rgb * (uGc[i].a * ends * below * (here * (across * 0.4 + 0.1 * exp(-vP.x * vP.x / 900.0)) + across * 0.7 * exp(-sq2((tall - uGd[i].w) / 0.35))));
+            }
+            float most = max(more.r, max(more.g, more.b));
+            if (most > 0.001) {
+              c = c * al + more;
+              al = max(al, most);
+              c /= al;
+            }
+            #endif
+            gl_FragColor = vec4(c, al);
           }`,
       });
-      const core = new THREE.Mesh(new THREE.PlaneGeometry(26, 1), coreMat);
+      const core = new THREE.Mesh(new THREE.PlaneGeometry(64, 1), coreMat);
       core.position.z = -8;
       scene.add(core);
 
       scene.add(keyA, keyB, rim, new THREE.AmbientLight(0xffffff, 0.06));
+
+      // ── The cards' balls, come to it (§106.13) ──
+      const guests = inIt ? makeGuests(THREE, renderer, camera, inIt.uniforms, grain, !wide.matches) : null;
+      let taking = false;
+      if (guests) scene.add(guests.group);
 
       // ── The sparks rising round it ────────────────────────────────────
       // Two kinds: fast sparks streaming up, and a dense, slow sleeve of
@@ -586,6 +646,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           }`,
         fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           uniform float uTime, uOpen, uGain, uBoost;
           uniform vec3 uC0, uHot;
           varying vec2 vUv;
@@ -594,7 +656,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
             float d = length(q);
             float core = exp(-d * d * 9.0);
             float ang = atan(q.y, q.x);
-            float rim = exp(-pow((d - 0.66) / 0.06, 2.0)) * (0.5 + 0.5 * sin(ang * 3.0 - uTime * 0.3));
+            float rim = exp(-sq2((d - 0.66) / 0.06)) * (0.5 + 0.5 * sin(ang * 3.0 - uTime * 0.3));
             float k = core * 0.8 + rim * 0.45;
             gl_FragColor = vec4(mix(uC0, uHot, min(1.0, core * uBoost)), k * min(1.0, uOpen) * uGain * uBoost);
           }`,
@@ -623,12 +685,19 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         tintBright.copy(rgb("b2", [125, 240, 220])).lerp(new THREE.Color(1, 1, 1), 0.55);
         // The panels the glass reflects, in this theme's light (brighter than
         // white: they are light sources).
-        envA.color = rgb("a2", [240, 160, 100]).multiplyScalar(2.2);
-        envB.color = rgb("b2", [125, 240, 220]).multiplyScalar(2.2);
-        envC.color = rgb("c", [155, 140, 255]).multiplyScalar(1.8);
+        // (Part white: the film's own colours show in them.)
+        const pale = new THREE.Color(1, 1, 1);
+        envA.color = rgb("a2", [240, 160, 100]).lerp(pale, 0.4).multiplyScalar(2.2);
+        envB.color = rgb("b2", [125, 240, 220]).lerp(pale, 0.4).multiplyScalar(2.2);
+        envC.color = rgb("c", [155, 140, 255]).lerp(pale, 0.3).multiplyScalar(2);
         envGlint.color = new THREE.Color(1, 1, 1).multiplyScalar(light ? 2 : 3);
         relight();
-        baked?.bake();
+        baked.bake();
+        innerBase.copy(rgb("b2", [125, 240, 220])).multiplyScalar(light ? 0.5 : 0.62);
+        inner.value.copy(innerBase);
+        paintPowder = () => powder?.paint({ powder: rgb("ink3", [169, 189, 210]).lerp(rgb("b2", [125, 240, 220]), 0.25), a: rgb("a2", [240, 160, 100]), b: rgb("b2", [125, 240, 220]), gold: rgb("gold", [240, 189, 106]), light });
+        paintPowder();
+        nerves.paint({ thread: rgb("b2", [125, 240, 220]), impulse: rgb("gold", [240, 189, 106]), light });
         glow.uLitCol.value = rgb("b2", [125, 240, 220]).multiplyScalar(0.6);
         glow.uPulseCol.value = rgb("gold", [240, 189, 106]);
         coreMat.uniforms.uCol.value = rgb("b2", [125, 240, 220]);
@@ -663,10 +732,12 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       };
       relight();
       // Built off the main thread, then painted.
-      await baked?.warm().catch(() => {});
+      await baked.warm().catch(() => {});
       if (dead) {
         unguard();
-        baked?.dispose();
+        baked.dispose();
+        grain.dispose();
+        variants.forEach((g) => g.dispose());
         pmrem.dispose();
         renderer.dispose();
         renderer.forceContextLoss();
@@ -674,20 +745,31 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       }
       paint();
       window.addEventListener(THEME_EVENT, paint);
+      void guests?.warm().then(() => {
+        taking = !dead;
+      });
 
       const gpu = watchGpu(renderer, "spine", !wide.matches, (ratio) => {
         renderer.setPixelRatio(ratio);
+        guests?.ratio(ratio);
         sparkMat.uniforms.uRatio.value = ratio;
         portalMat.uniforms.uRatio.value = ratio;
         dirty = true;
       });
       let W = 1;
       let H = 1;
+      let sized = "";
       let U = 1;
+      let unit = 39;
+      let pitch = 55;
       const fit = () => {
         W = Math.max(1, el.clientWidth);
         H = Math.max(1, el.clientHeight);
-        renderer.setSize(W, H, false);
+        // (Only when it has changed: the same size again is a new drawing surface too.)
+        const size = `${W}x${H}`;
+        if (size !== sized) renderer.setSize(W, H, false);
+        sized = size;
+        host.half = W / 2;
         camera.aspect = W / H;
         const dist = H / (2 * Math.tan((FOV * Math.PI) / 360));
         camera.position.set(0, 0, dist);
@@ -697,12 +779,16 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         camera.updateProjectionMatrix();
         // A phone's spine stands behind the cards: a little bigger, and its
         // sparks may roam wider.
-        U = wide.matches ? 1 : 1.25;
+        U = wide.matches ? 1.1 : 1.3;
+        unit = boneSize();
+        pitch = unit * BONE_PITCH;
+        // Off the words: half the gap between the columns (a phone's is behind them).
+        const gap = wide.matches ? (window.matchMedia("(min-width: 1280px)").matches ? 64 : 44) : 150;
         sparkMat.uniforms.uH.value = H;
         sparkMat.uniforms.uDist.value = dist;
-        sparkMat.uniforms.uR0.value = wide.matches ? 14 : 18;
-        sparkMat.uniforms.uR1.value = wide.matches ? 92 : 130;
-        sparkMat.uniforms.uLimit.value = wide.matches ? 34 : 150;
+        sparkMat.uniforms.uR0.value = unit * 0.92;
+        sparkMat.uniforms.uR1.value = wide.matches ? 74 : 108;
+        sparkMat.uniforms.uLimit.value = gap;
         portalMat.uniforms.uDist.value = dist;
         portalMat.uniforms.uR.value = Math.min(W * 0.46, wide.matches ? 104 : 124);
         coreMat.uniforms.uH.value = H;
@@ -713,20 +799,47 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       fit();
       const ro = new ResizeObserver(fit);
       ro.observe(el);
+      // Where its lane and the column are on the page: measured when they, or the page, change
+      // size, and now and then (something above may have moved them).
+      const box = { colTop: 0, colH: 1, laneTop: 0, laneEnd: 1, mid: 0 };
+      const measure = () => {
+        const host = el.parentElement;
+        if (!host) return;
+        const y = window.scrollY;
+        const c = col.getBoundingClientRect();
+        const l = host.getBoundingClientRect();
+        Object.assign(box, { colTop: c.top + y, colH: c.height, laneTop: l.top + y, laneEnd: l.bottom + y, mid: l.left + l.width / 2 });
+        dirty = true;
+      };
+      measure();
+      const roPage = new ResizeObserver(measure);
+      roPage.observe(col);
+      if (el.parentElement) roPage.observe(el.parentElement);
+      roPage.observe(document.body);
+      const again = window.setInterval(measure, 3000);
 
       let visible = false;
       let introStart = -1;
       const io = new IntersectionObserver(([e]) => {
         visible = e.isIntersecting;
-        if (visible && introStart < 0) introStart = performance.now();
+        if (!visible) host.ready = false;
+        if (!visible || introStart >= 0 || offOpen) return;
+        // Its first sight is the door opening, not behind it (§103.10): the bones rise
+        // as the burst goes by, and the galaxy forms of the dust that comes home to it.
+        offOpen = whenOpen((bang) => {
+          introStart = performance.now() + (bang ? 60 : 0);
+          birth = bang ? 1.45 : 0.05;
+        });
       });
+      let offOpen: (() => void) | null = null;
+      let birth = 0.05;
       io.observe(el);
 
-      let lastY = window.scrollY;
+      let lastY = pageY();
       let scrollV = 0;
       let busyUntil = 0;
       const onScroll = () => {
-        const y = window.scrollY;
+        const y = pageY();
         scrollV = Math.min(40, scrollV + Math.abs(y - lastY) * 0.35);
         lastY = y;
         busyUntil = performance.now() + 1200;
@@ -735,7 +848,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       window.addEventListener("scroll", onScroll, { passive: true });
 
       const dummy = new THREE.Object3D();
-      const counts = [0, 0, 0, 0];
+      const counts = [0, 0, 0];
       let t = 0;
       let rise = 0;
       let power = 0;
@@ -745,15 +858,20 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       let prev = performance.now();
       const born = prev;
       let raf = 0;
+      const hold = holder(5);
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const dt = Math.min(0.06, (now - prev) / 1000);
         prev = now;
-        if (!visible || document.hidden) return;
+        if (!visible || document.hidden || hold()) return;
         // The easter egg, while it plays: every frame.
         const bt = burstAt.current > 0 ? (now - burstAt.current) / 1000 : 99;
-        const busy = now < busyUntil || (introStart > 0 && now - introStart < 2400) || bt < BURST.done;
+        let st = struck.t > 0 ? (now - struck.t) / 1000 : 99;
+        let breaking = st < BREAK.done;
+        const woken = near.current.on || nearU.uNear.value > 0.01;
+        const busy = now < busyUntil || (introStart > 0 && now - introStart < 3600) || bt < BURST.done || breaking || woken;
         if (still && !dirty) return;
+        if (spread && !breaking && st > BREAK.done + 0.4 && now > busyUntil) widen(false);
         // At rest the sparks drift slowly: half the frames are plenty.
         if (!busy && !dirty) {
           skip = !skip;
@@ -781,49 +899,166 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         glow.uPulse.value = pulse * 0.9;
 
         // Where the column is, against the canvas.
-        const cr = col.getBoundingClientRect();
-        const kr = el.getBoundingClientRect();
-        const top = kr.top - cr.top;
-        const colH = cr.height;
-        glow.uLine.value = H * 0.5 - (window.innerHeight * 0.62 - kr.top);
-        const spin = still ? 0 : window.scrollY * 0.0016 + t * 0.05;
-        const intro = introStart > 0 && !still ? (now - introStart) / 1000 : 9;
+        // (Worked out, not asked, where that can be: scrollPos. The canvas sticks to the top of
+        // the screen while its lane passes.)
+        const free = pageYFree();
+        const sy = pageY();
+        let crTop: number;
+        let krTop: number;
+        let krMid: number;
+        let colH: number;
+        if (free) {
+          crTop = box.colTop - sy;
+          colH = box.colH;
+          krTop = Math.min(Math.max(box.laneTop - sy, 0), box.laneEnd - sy - H);
+          krMid = box.mid;
+        } else {
+          const cr = col.getBoundingClientRect();
+          const kr = el.getBoundingClientRect();
+          crTop = cr.top;
+          colH = cr.height;
+          krTop = kr.top;
+          krMid = kr.left + kr.width / 2;
+        }
+        const top = krTop - crTop;
+        // Touched: it breaks, as soon as its pieces are here.
+        if (hit.current.wait) {
+          if (!broken) void getBroken();
+          else {
+            hit.current.wait = false;
+            const k = Math.round((hit.current.y - crTop - pitch / 2) / pitch);
+            if (!breaking && bt >= BURST.done && k >= 0 && (k + 0.5) * pitch < colH - MORPH * 0.55) {
+              Object.assign(struck, { t: now, k, y: hit.current.y - crTop, x: hit.current.x - krMid, surged: false });
+              hit.current.at = now;
+              st = 0;
+              breaking = true;
+              widen(true);
+              const root = el.closest<HTMLElement>(".dev-root");
+              root?.setAttribute("data-shatter", "");
+              // (By the clock too: the skeleton may have been scrolled out of sight by then.)
+              window.setTimeout(() => root?.removeAttribute("data-shatter"), BREAK.done * 1000 + 200);
+              playBreak();
+            }
+          }
+        }
+        const glowLight = breaking ? breakLight(st) : null;
+        if (!breaking && hit.current.at > 0) {
+          hit.current.at = -1;
+          (el.closest(".dev-root") as HTMLElement | null)?.removeAttribute("data-shatter");
+          inner.value.copy(innerBase);
+          renderer.toneMappingExposure = 1.02;
+          glow.uLit.value = 0.12;
+        }
+        if (glowLight) {
+          inner.value.copy(innerBase).multiplyScalar(glowLight.inner);
+          renderer.toneMappingExposure = 1.02 * glowLight.room;
+          glow.uLit.value = 0.12 * Math.min(1, glowLight.core);
+          blast.uBlast.value.set(struck.x * 0.6, H * 0.5 - (struck.y - top), 60);
+          blast.uUnit.value = unit;
+          // Its last light, once it is whole: up the bone.
+          if (!struck.surged && st > BREAK.rest + BREAK.home + 0.35) {
+            struck.surged = true;
+            pulseY = -H * 0.5 - 140;
+            pulse = 1.5;
+          }
+        }
+        const kick = st - BREAK.first;
+        const shove = breaking ? (kick < 0 ? 0.5 * smooth(0, BREAK.first, st) : 6 * Math.exp(-kick * 7)) : 0;
+        camera.position.x = Math.sin(now * 0.083) * shove;
+        camera.position.y = Math.sin(now * 0.107 + 1.3) * shove;
+        near.current.on = near.current.on && !breaking;
+        nearU.uNear.value += ((near.current.on ? 1 : 0) - nearU.uNear.value) * (1 - Math.exp(-dt * 7));
+        nearU.uNearY.value = H * 0.5 - (near.current.y - krTop);
+        glow.uLine.value = H * 0.5 - (window.innerHeight * 0.62 - krTop);
+        const spin = still ? 0 : sy * 0.0016 + t * 0.05;
+        const intro = still ? 9 : introStart > 0 ? Math.max(0, (now - introStart) / 1000) : covered() ? 0 : 9;
         counts.fill(0);
-        const k0 = Math.max(0, Math.floor((top - 80) / STEP));
-        const k1 = Math.min(Math.floor(colH / STEP), Math.ceil((top + H + 80) / STEP));
-        for (let k = k0; k <= k1; k++) {
-          const yCol = k * STEP + STEP / 2;
+        nNerves = 0;
+        broken?.forEach((b) => {
+          b.n = 0;
+        });
+        const k0 = Math.max(0, Math.floor((top - 120) / pitch));
+        const k1 = Math.min(Math.floor(colH / pitch), Math.ceil((top + H + 120) / pitch));
+        const seat = (v: number, k: number, yCol: number, disc: boolean) => {
           const yCanvas = yCol - top;
-          const v = PATTERN[k % PATTERN.length];
           // Out of nothing at the top; at the bottom they break apart and fall
           // away while the chain forms among them.
           const boneFade = 1 - smooth(colH - MORPH, colH - MORPH * 0.3, yCol);
           const scatter = 1 - boneFade;
           // Out of the portal at the top: the first bones condense out of its
           // dust — small, loose, pulled up towards it — before they settle.
-          const emerge = smooth(-20, 210, yCol);
+          const emerge = smooth(-20, 250, yCol);
           const loose = 1 - emerge;
           const ends = (0.1 + 0.9 * emerge) * boneFade;
           // The first sight: bones rise into place from below, the lowest first.
           const delay = (1 - Math.min(1, Math.max(0, yCanvas / H))) * 0.7;
           const e = 1 - Math.pow(1 - Math.min(1, Math.max(0, (intro - delay) / 0.9)), 3);
-          const s = (0.9 + hash(k * 3.1) * 0.22) * ends * (0.15 + 0.85 * e) * U;
-          if (s < 0.02) continue;
-          const drift = still ? 0 : Math.sin(t * 1.3 + k) * 6 * loose;
+          // A column of bones, not of beads: each a little its own, all in line,
+          // the whole with a spine's long curves in it.
+          const s = (disc ? 1 : 0.97 + hash(k * 3.1) * 0.06) * ends * (0.15 + 0.85 * e);
+          if (s < 0.02) return;
+          const drift = still ? 0 : Math.sin(t * 1.3 + k) * 8 * loose;
+          const bend = Math.sin(yCol * 0.0034 + 0.6) * 0.1 + Math.sin(yCol * 0.0013 + 1.9) * 0.07;
+          const lean = (Math.cos(yCol * 0.0034 + 0.6) * 0.1 * 0.0034 + Math.cos(yCol * 0.0013 + 1.9) * 0.07 * 0.0013) * unit;
           dummy.position.set(
-            (hash(k * 7.3) - 0.5) * 46 * scatter + (hash(k * 9.7) - 0.5) * 34 * loose + drift,
-            H * 0.5 - yCanvas - (1 - e) * 170 - scatter * 14 + loose * 22,
-            (hash(k * 8.1) - 0.5) * 30 * scatter + (hash(k * 4.9) - 0.5) * 26 * loose,
+            bend * unit + (hash(k * 7.3) - 0.5) * 90 * scatter + (hash(k * 9.7) - 0.5) * 70 * loose + drift,
+            H * 0.5 - yCanvas - (1 - e) * 190 - scatter * 18 + loose * 26,
+            (hash(k * 8.1) - 0.5) * 60 * scatter + (hash(k * 4.9) - 0.5) * 50 * loose,
           );
-          dummy.rotation.set((hash(k * 1.7) - 0.5) * (0.2 + scatter * 1.6 + loose * 1.2), k * 0.42 + hash(k * 2.3) * 0.6 + spin, (hash(k * 5.1) - 0.5) * (0.24 + scatter * 1.4 + loose * 1.1));
-          dummy.scale.setScalar(s);
+          dummy.rotation.set((hash(k * 1.7) - 0.5) * (0.05 + scatter * 1.6 + loose * 1.2), k * 0.085 + Math.sin(k * 0.31) * 0.16 + spin, lean + (hash(k * 5.1) - 0.5) * (0.04 + scatter * 1.4 + loose * 1.1), "YXZ");
+          dummy.scale.setScalar(s * unit * BONE_UNIT);
+          const far = Math.abs((disc ? k + 0.5 : k) - struck.k);
+          const life = breaking && broken ? boneLife(st, far) : null;
+          if (life) {
+            const shake = tremble(st, far);
+            dummy.position.x += Math.sin(now * 0.09 + k * 2.1) * shake;
+            dummy.position.y += Math.sin(now * 0.11 + k * 1.3) * shake * 0.6;
+          }
+          // A disc keeps whole till it bursts, and is whole again once its shards are home.
+          const shards = life && disc && life[1] > 0 && life[2] < 1;
+          // It turns about the cord, behind its body.
+          dummy.translateZ(-BONE_AXIS * unit * s);
           dummy.updateMatrix();
-          meshes[v].setMatrixAt(counts[v]++, dummy.matrix);
+          // (Its threads: gone the moment it breaks; they grow out again as it heals.)
+          if (!disc && s > 0.5) nerves.put(nNerves++, dummy.matrix, (life ? (life[2] < 1 ? 0 : smooth(BREAK.home, BREAK.home + BREAK.heal, st - BREAK.rest - far * BREAK.call)) : 1) * e * emerge * boneFade, hash(k * 2.9 + 0.3));
+          if (broken && life && (!disc || shards)) {
+            const give = (b: NonNullable<typeof broken>[number], seed: number) => {
+              if (b.n >= b.many) return;
+              b.mesh.setMatrixAt(b.n, dummy.matrix);
+              b.life.setXYZW(b.n, life[0] * s, life[1], life[2], life[3]);
+              b.seed.setX(b.n, seed);
+              b.n++;
+            };
+            if (!disc) give(broken[v], hash(k * 1.37 + 0.5));
+            // Splinters: off every bone and out of every disc, in the air only.
+            if (life[1] > 0) {
+              dummy.scale.multiplyScalar((disc ? 1.5 : 1) * (1 - smooth(0.55, 0.98, life[2])));
+              if (disc) dummy.scale.y *= 0.4;
+              dummy.updateMatrix();
+              give(broken[SPLINTERS], hash(k * 3.71 + (disc ? 0.9 : 0.1)));
+            }
+          } else if (counts[v] < CAP) meshes[v].setMatrixAt(counts[v]++, dummy.matrix);
+        };
+        for (let k = k0; k <= k1; k++) {
+          const yCol = k * pitch + pitch / 2;
+          seat(hash(k * 6.7) > 0.76 ? 1 : 0, k, yCol, false);
+          seat(2, k, yCol + pitch / 2, true);
         }
         meshes.forEach((m, v) => {
           m.count = counts[v];
           m.instanceMatrix.needsUpdate = true;
         });
+        nerves.done(nNerves);
+        nerves.set(t, W, H, (light ? 0.5 : 1) * (glowLight ? Math.min(1, 0.2 + glowLight.core) : 1), power);
+        broken?.forEach((b) => {
+          b.mesh.visible = b.n > 0;
+          b.mesh.count = b.n;
+          if (!b.n) return;
+          b.mesh.instanceMatrix.needsUpdate = true;
+          b.life.needsUpdate = true;
+          b.seed.needsUpdate = true;
+        });
+        powder?.set({ st: breaking ? st : -1, y0: H * 0.5 - (struck.y - top), x0: struck.x, pitch, H, dist: sparkMat.uniforms.uDist.value as number, ratio: renderer.getPixelRatio(), radius: unit });
         // The chain: forming among the last bones, hanging on below the
         // column, swaying more the further it hangs, alternate links turned a
         // quarter so each passes through the next, a light running down it.
@@ -867,9 +1102,9 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         chainLinks.instanceMatrix.needsUpdate = true;
         if (chainLinks.instanceColor) chainLinks.instanceColor.needsUpdate = true;
         // The core runs only where the column is.
-        coreMat.uniforms.uGain.value = (light ? 0.22 : 0.5) * Math.min(1, colH / 300);
-        keyA.position.set(-80, Math.sin(t * 0.5) * H * 0.36, 90);
-        keyB.position.set(84, Math.cos(t * 0.41) * H * 0.36, 70);
+        coreMat.uniforms.uGain.value = (light ? 0.22 : 0.5) * Math.min(1, colH / 300) * (glowLight?.core ?? 1);
+        keyA.position.set(-150, Math.sin(t * 0.5) * H * 0.36, 150);
+        keyB.position.set(156, Math.cos(t * 0.41) * H * 0.36, 120);
         // The portal, at the column's top (canvas y = -top).
         const yTop = -top;
         coreMat.uniforms.uTop.value = H * 0.5 - yTop + (wide.matches ? 0 : 54);
@@ -883,7 +1118,7 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         if (showPortal) {
           // It opens as the spine first comes into view (a little past full,
           // then settling, like an iris).
-          const o = still ? 1 : Math.min(1, Math.max(0, (intro - 0.05) / 1.1));
+          const o = still ? 1 : Math.min(1, Math.max(0, (intro - birth) / (birth > 1 ? 1.7 : 1.1)));
           const open = still ? 1 : 1 - Math.pow(1 - o, 3) + Math.sin(o * Math.PI) * 0.08;
           const R = portalMat.uniforms.uR.value as number;
           // Its own clock: real time, the same at rest (when every other frame
@@ -895,7 +1130,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           // hangs there), its heart straining brighter and then flashing as it
           // goes, and re-forms out of its heart as the dust comes home.
           let bMul = 1;
-          let boost = 1;
+          // (As the opening's dust comes home: a light in it.)
+          let boost = birth > 1 ? 1 + Math.sin(o * Math.PI) * 1.1 : 1;
           if (bt < BURST.done) {
             if (bt < BURST.inhale) {
               const k = bt / BURST.inhale;
@@ -924,14 +1160,19 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
           heartMat.uniforms.uBoost.value = boost;
           heartAt.current.ok = o >= 1 && PN > 0;
         } else heartAt.current.ok = false;
+        heartAt.current.here = showPortal && PN > 0;
         // Where its heart is on the screen (the easter egg's touch and burst).
-        heartAt.current.x = kr.left + kr.width / 2;
-        heartAt.current.y = cr.top - lift;
+        heartAt.current.x = krMid;
+        heartAt.current.y = crTop - lift;
         heartAt.current.r = portalMat.uniforms.uR.value as number;
         sparkMat.uniforms.uTime.value = t;
         sparkMat.uniforms.uRise.value = rise;
         sparkMat.uniforms.uPower.value = power;
+        sparkMat.uniforms.uGain.value = (light ? 0.8 : 1) * (glowLight ? 0.18 + 0.82 * Math.min(1, glowLight.core) : 1);
+        // The cards' balls (not while it breaks: its canvas is another then).
+        host.ready = taking && !breaking && !spread;
         gpu.begin();
+        if (guests?.place({ sy, mid: krMid, top: krTop, W, H, unit, t: now / 1000, light })) guests.paint();
         renderer.render(scene, camera);
         gpu.end();
       };
@@ -939,9 +1180,22 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
 
       cleanup = () => {
         unguard();
+        offOpen?.();
+        offLeisure();
+        host.ready = false;
+        guests?.dispose();
+        nerves.dispose();
+        (el.closest(".dev-root") as HTMLElement | null)?.removeAttribute("data-shatter");
+        broken?.forEach((b) => {
+          b.mesh.geometry.dispose();
+          b.mesh.dispose();
+        });
+        powder?.dispose();
         gpu.dispose();
         cancelAnimationFrame(raf);
         ro.disconnect();
+        roPage.disconnect();
+        window.clearInterval(again);
         io.disconnect();
         window.removeEventListener(THEME_EVENT, paint);
         window.removeEventListener("scroll", onScroll);
@@ -959,7 +1213,8 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
         portalMat.dispose();
         heart.geometry.dispose();
         heartMat.dispose();
-        baked?.dispose();
+        baked.dispose();
+        grain.dispose();
         envTex?.dispose();
         envScene.traverse((o) => {
           const m = o as InstanceType<typeof THREE.Mesh>;
@@ -978,17 +1233,24 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       dead = true;
       cleanup();
     };
-  }, [column]);
+  }, [column, gen, gone]);
 
   // The easter egg: a touch at the galaxy's heart (and only there).
   const touch = () => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const now = performance.now();
-    if (!heartAt.current.ok || (burstAt.current > 0 && now - burstAt.current < BURST.done * 1000)) return;
+    if (!heartAt.current.ok || hit.current.at > 0 || (burstAt.current > 0 && now - burstAt.current < BURST.done * 1000)) return;
     burstAt.current = now;
     // A phone feels it: a tick as it draws in, a thump as it bursts.
     navigator.vibrate?.([10, 830, 45]);
     burstGalaxy(() => heartAt.current, tint.current.cols, tint.current.light, !window.matchMedia("(min-width: 1024px)").matches);
+  };
+
+  // …and a touch of the bones (§104.3).
+  const strike = (e: ReactMouseEvent) => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || hit.current.at > 0) return;
+    Object.assign(hit.current, { x: e.clientX, y: e.clientY, wait: true });
+    navigator.vibrate?.([8, 60, 8, 60, 12, 60, 14, 300, 60]);
   };
 
   return (
@@ -996,7 +1258,27 @@ export function CrystalSpine({ column }: { column: RefObject<HTMLElement | null>
       {/* 100lvh on a phone: one height whatever the address bar does (with
           100dvh its drawing surface was made anew each time the bar slid away,
           mid-scroll). */}
-      <canvas ref={canvas} aria-hidden className="pointer-events-none sticky top-0 block h-[100lvh] w-full lg:h-[100dvh]" />
+      <canvas key={gen} ref={canvas} aria-hidden className="pointer-events-none sticky top-0 block h-[100lvh] w-full lg:h-[100dvh]" />
+      {/* The bones can be touched (§104.3): down the middle of the lane, under whatever
+          covers it. */}
+      <div className="pointer-events-none sticky top-0 -mt-[100lvh] h-[100lvh] lg:-mt-[100dvh] lg:h-[100dvh]">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          data-spine-touch
+          onClick={strike}
+          // (Not the ring of water the rest of the app answers a touch with.)
+          data-no-ripple
+          onPointerMove={(e) => {
+            if (e.pointerType === "mouse") Object.assign(near.current, { y: e.clientY, on: true });
+          }}
+          onPointerLeave={() => {
+            near.current.on = false;
+          }}
+          className="pointer-events-auto absolute inset-y-0 left-1/2 w-[92px] -translate-x-1/2 cursor-pointer bg-transparent outline-none [-webkit-tap-highlight-color:transparent]"
+        />
+      </div>
       {/* The easter egg's touch: no mark on the page, only the galaxy's heart —
           SPINE_HEAD (130 px) down the lane, the portal lifted 54 px on a phone
           (as the loop draws it). Anything covering it takes the touch first. */}

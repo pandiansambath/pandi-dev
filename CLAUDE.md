@@ -71,7 +71,7 @@ scripts/                   sync_from_monorepo.py, pull_content.sh, globals.head.
 
 **One shell, many designs.** `dev/DevProfile.tsx` is the shell every design runs
 inside. It owns the state shared through `useDev()` (`dev/context.tsx`): the
-intro and ENTER, the theme, the album, the résumé viewer, milestones, toasts,
+intro (it opens by itself), the theme, the album, the résumé viewer, milestones, toasts,
 the music player and the owner panel. A design is a whole page that reads that
 context.
 
@@ -93,11 +93,27 @@ with `readRGB()` and re-reads on `THEME_EVENT`. The Studio (`Studio.tsx`, the
 palette icon in the top bar) lets a visitor switch theme and design; the switch
 plays a circular View Transition. `?theme=<id>&design=<id>` in the URL also works.
 
-**The intro (`BootSequence.tsx`).** Nothing is shown until everything is loaded:
-the portraits, the first song, three.js, the chest model, the award room's code
-and the sound effects are all fetched while the counter runs (`bootTasks` in
-`DevProfile.tsx`). ENTER is the first tap, which is also what lets the browser
-start the music.
+**The intro (`BootSequence.tsx`, `opening.ts`, `openingArt.ts`, `stage.ts`).** Nothing is
+shown until everything is loaded: the portraits, the first song, three.js, the chest model,
+the award room's code and the sound effects are all fetched while the counter runs
+(`bootTasks` in `DevProfile.tsx`). There is NO ENTER button: when the last of it has come
+the site opens by itself. What stands on the door goes to dust (every dot of its ink is
+read off a 2D canvas) and falls, swirling, into one point; a breath; the point bursts; the
+page is there inside the shock front; the dust that hangs there afterwards spirals home into
+the galaxy at the head of the skeleton (no galaxy in sight: into the portrait), which forms
+out of it. One raw WebGL canvas, every grain moved in the vertex shader — it was a 2D canvas
+first, and two thousand drawing commands a frame cost 25 ms. The door is `[data-boot]`
+(`loading` → `sealed` → `open`, then gone): tests wait for that. Rules it rests on:
+- Behind something truly OPAQUE a browser paints nothing, and then the whole page is painted
+  in the very moment it opens (0.7 s of stall). So the door is 99.7 % opaque while it loads,
+  nothing behind it is hidden with `opacity: 0`, and what `entered` sets moving is held at
+  its END until the burst (painted, all of it) and then played from its first frame.
+- `stage.ts` knows whether the page can be seen: canvases draw a few frames behind the door
+  and hold still (`holder`), what plays once plays when it is first seen (`whenOpen`,
+  `useOpened`), heavy builds keep out of the opening (`atLeisure`).
+- It gives its context back if the browser takes any of the page's away; no graphics, lost
+  graphics, or reduced motion: the door simply fades. Coming back from the award room it
+  goes straight to the point of light.
 
 **Chain Reaction pieces.** `SkillOrbit.tsx` (3D rings of skills, drag to spin),
 `ChainField.tsx` (background strands, turn with scroll), `ChainSpine.tsx`
@@ -106,20 +122,30 @@ since 1 Jan 2024; single click = details, double click = edit), `Terminal.tsx`
 (the Shell card: type or tap commands), `SkillClusters.tsx`, `Highlights.tsx`,
 `Resume.tsx`, `Finale.tsx` + `ChainRing.tsx` (the 3D chain that assembles,
 closes with a flash and turns; tilt follows the pointer, drag spins it).
-**The orbit (globals.css `devRevolve` / `devRevolvePhone`).** Every right-hand
-card (`[data-link]`) lives one orbit round the divider, driven by its own scroll
-position (a named view timeline, `--dev-card`): far and small on the LEFT (a card
-still to come, passing behind the portrait column, which sits at `z-[2]`), round
-behind the crystal divider, full size on the RIGHT facing you (the present), then
-on round and away. A phone orbits the middle (the divider is centred behind the
-cards there). Transforms only — no z-index in the keyframes (that drags the whole
-orbit onto the main thread); the divider and the portrait column sit above the
-cards for good. CSS also fades a card's words in only in the present
-(`devChainReveal`).
+**The orbit (globals.css `devRevolve` / `devRevolvePhone`, `orbit.ts`).** Every right-hand
+card (`[data-link]`) lives one life by its own scroll position (a named view timeline,
+`--dev-card`): it comes out of the crystal divider as a ball, unwinds to full size on the RIGHT
+facing you (the present, 40–60 % of the way), winds itself up again and goes back into the
+divider. As it lets go of its place it floats (the page goes on under it), so that what happens
+at the divider is seen a fifth of the way down the screen, not at its edge. On a phone (one
+column, the divider behind its middle) it swings out a little and in. Transforms only — no
+z-index in the keyframes (that drags the whole orbit onto the main thread). THE SAME NUMBERS are
+in `dev/orbit.ts` (the browser moves the card; what draws its ball must know where it is): change
+both. CSS also shows a card's words only in the present (`devChainReveal`).
 
 **Surfaces (`CardGL.ts`, `registerSurface`).** The popups and the sound menu
-wear the same glass and water as the cards (a surface is always open and flat; no
-orb). Their buttons are glass (`.dev-glassbtn`) over the water.
+wear the same glass and water as the cards (a surface is always open and flat, no
+ball). Their buttons are glass (`.dev-glassbtn`) over the water.
+
+**Words that can be read (24 Nov: "text should be clearly visible, dude").** A card's words are
+there ONCE: the page's own in the present, the painted ones (`cardInk`) either side, never both
+(the first card waits exactly at the edge of its present: it goes by its own leaving, or its
+painted words lie over its own, "10" and "10"). Behind words the water is quiet (`uInkHas` in
+`cardScene`: its bright veins crossed the letters), their edge is a fine dark one, the faintest
+inks a step plainer on the cards' column (`.dev-words` in globals.css). The sheet's words are
+painted at 2–2.5× and sampled a little sharp: one may stop the scroll half wound and read them.
+The orbit of skills goes a sixth slower than it did, and its pace is his (owner panel → Portrait,
+`pace` in `portrait.json`).
 
 **The top menu is written, not drawn (`TopBar.tsx`).** Three menus that drew
 something behind the buttons (a black bar, a water bar, liquid capsules) each pulled
@@ -155,38 +181,170 @@ piece claims a context (`claimContext()`); the finale's ring is built once and k
 canvas; the award room frees its context on close. Every WebGL canvas is guarded:
 taken away by the browser, it marks itself `data-gl-lost` (hidden by CSS — the dark
 ground shows, never white) and the card pool cuts its cap. Our own clean-ups free
-contexts on purpose: take the guard off first.
+contexts on purpose: take the guard off first. An app's own browser (Instagram's) loses
+them too: the no-photo piece and the skeleton ask for a fresh canvas a few times
+(`useComeBack.ts`), and a still of the piece (`[data-core-still]`) stands there until it is
+drawn — never an empty place in the orbit. The background does not come back (asking again
+took the portrait's piece away).
 
-**What a card LOOKS like is drawn in WebGL (`CardGL.ts`).** `CardChrome`
-(`flourish.tsx`) only puts a slot in the card; a small pool of WebGL canvases (6 on
-a desktop, 4 on a phone) moves from card to card, near the screen only. For its
-card's place in the orbit (the same progress as the CSS timeline) a canvas draws:
-the card — dark glass with the theme's painted water (`liquid.ts`) drifting in two
-sheets, an iridescent rim in the card's own colour — flat in the centre and curved
-like a piece of the cylinder it travels round as it turns away; the ORB it is when
-away — a wobbling sphere of the same water wound into a spiral, an atmosphere, a
-ragged halo, a disc of bubbles; and the change between them — the card opens out
-of its heart along a ragged glowing front. The cursor stirs the water (rings,
-colour split, a soft light) and draws each card's few motes of dust. A card with
-no canvas wears plain glass, shown only in the present. Do NOT go back to CSS
-layers for this: a dozen layers a card measured 318 layers / 76 MP of layer pixels
-— past the GPU budget, so tiles were thrown away mid-scroll (flicker). Now ~235 /
-27 MP. Measure with the CDP LayerTree domain.
+**What a card LOOKS like is drawn in WebGL (`CardGL.ts`, `cardScene.ts`), its words painted on
+it (`cardInk.ts`).** `CardChrome` (`flourish.tsx`) only puts a slot in the card; a small pool of
+WebGL canvases moves from card to card, near the screen only (`CardGL`: who has a canvas, where it
+is in its orbit, the cursor). What is in it is `cardScene`: one sheet of dark glass with the
+theme's painted water (`liquid.ts`) in it. Flat, it is the card. As it leaves, it WINDS ITSELF UP:
+its right edge lifts towards you, curls over and winds to the left, turn upon turn, a scroll;
+then the scroll opens out, is drawn in to its poles and closes as a ball of that same glass, the
+turns still inside it, the water running round them, drops going round it. It opens the same way.
+The shape is worked out column by column on the CPU (how tight the scroll is at each place) and
+handed to one mesh; glass is seen through, so the half of it behind its middle is drawn first,
+from the outside in, and the half before it after, from the inside out (two index buffers, no
+depth). It is lit by the spine: a strip of light mirrored along the bends, cut edges that glow,
+thin-film colours, air in the glass, the light that went through gathered on the far side.
+(On 24 Nov it closed into real planets for four hours: the owner hated them, "too comic", "a
+planet is awkward" beside a skeleton. Do not go back. Calm: "don't make [it] too bright… also
+don't make [it] too dull".)
+In the present the words are the page's own text; either side of that they are a PICTURE of those
+words on the sheet, or they would stand still while the card turns ("text words are not following,
+see"). `cardInk` reads each card once (boxes, hairlines, icons, letters line by line, with the
+scroll's animations off: `data-inking`) and paints it with the same fonts in the same places; the
+page's own words go out in the few pixels of scroll in which the painted ones come
+(`devChainReveal`, `ink` in CardGL) and do not move, or the two are seen apart. What counts (a
+clock) is painted again just before it is needed. It is drawn every frame only while it winds; a
+ball at rest every third, and the browser moves the canvas. Do NOT go back to CSS layers for a
+card: a dozen layers a card measured 318 layers / 76 MP of layer pixels — past the GPU budget, so
+tiles were thrown away mid-scroll (flicker).
 
-**The crystal spine (`CrystalSpine.tsx`, inside `ChainSpine.tsx`).** A 3D column
-of vertebrae (lumpy bones, wings, spurs, discs, thorns, crystal shards) in dark
-glass with an oil-slick film, reflecting a dark environment lit by panels in the
-theme's colours (a white room turned it to porcelain). A sticky canvas in the
-divider's lane; the bones are laid out in the column's coordinates and grow out
-of nothing at its ends. Round it: a dense, slow sleeve of bokeh and bubbles and
-fast sparks that surge upward when you scroll. The line and the dot that runs down
-and stops at each card are DOM (ChainSpine).
+**The crystal spine (`CrystalSpine.tsx`, inside `ChainSpine.tsx`).** A 3D column of real
+VERTEBRAE — body, pedicles, lamina, transverse and spinous processes, facets, the canal —
+modelled offline as signed distance fields (`ops/art/vertebra.py`), meshed, decimated and
+packed with their own baked ambient light (`public/dev/spine/bone_*.bin`, `spineBone.ts`):
+two of them, in two finenesses (triangles much smaller than a few pixels cost the GPU the
+same pixels several times over), with clear discs between, seated like a spine on one
+curve, about the cord behind their bodies. Their crystal (an iridescent film, a clear coat,
+a dark room of the theme's lights) is baked into two small pictures as it turns
+(`spineBake.ts`). A sticky canvas in the divider's lane; the bones are laid out in the
+column's coordinates, grow out of nothing at its ends, and rise into place as the site
+opens. Round it: a dense, slow sleeve of bokeh and bubbles and fast sparks that surge upward
+when you scroll. The line and the dot that runs down and stops at each card are DOM
+(ChainSpine).
+
+**Touched, the skeleton breaks and is born again (`spineBreak.ts`, `spineBake.ts` SHATTER,
+`spineBone.ts`).** A click or a tap on the bones (a strip down the lane, `data-spine-touch`;
+the galaxy's heart has its own): cracks run up and down the column with the cord's light in
+them, then it bursts, the struck bone first; the light dies, the pieces hang and sink in the
+dark; a heart beats where the cord was; the pieces spiral home and the cracks heal. Each
+vertebra really is in nineteen pieces, modelled offline from the same distance field
+(`ops/art/fracture.py`: their rough faces fit each other), and every piece's flight is worked
+out in the bones' own shader from which bone and which piece it is: the CPU only says how far
+along each bone is (`boneLife`). The spine's canvas is 1240 px wide meanwhile (made so in the
+moment of the blow, put back when nothing scrolls); `.dev-root[data-shatter]` dims the cord,
+and thins the cards' glass on a phone, where the skeleton stands behind them. Its sound
+(`spineSound.ts`, synthesised) plays only while the music does. What runs through the spine
+besides bone — nerves, the beaded cords either side, ligaments, impulses along them — is
+`spineNerves.ts`: ribbons as wide as they are on the screen.
+
+**The ball goes into the skeleton (`orbit.ts`, `guests.ts`, `spineGuests.ts`, 25 Nov).** "When I
+scroll, that ball is disappearing: instead make that ball dissolve inside the skeleton." A ball
+near the bones cannot be drawn on its card's canvas (that canvas is behind the skeleton, on a
+phone before it), and one that goes INTO the bones has to be among them. So, closed, and come
+within the skeleton's lane, its card lets go of it (`CardGL.handed`: its own canvas is emptied in
+that very frame) and the skeleton draws it: the same ball (`cardScene`, `bare`) to a small picture
+of its own, hung in the skeleton's scene as deep at every pixel as a ball is there
+(`gl_FragDepth`), so bones stand in it and out of it. The bones answer the ball nearest them
+(`spineBake` GUESTS): in it they are larger (a ball of water is a lens) and under water — its light
+in moving nets, its skin a bright line where a bone comes out — and as it soaks in, its light runs
+up and down them in veins, with the nerves and the light in the gaps. The ball thins, is drawn to
+the cord, and is eaten away from its rim inwards in the pattern of its own water, every edge a
+line of light (as wide on the screen wherever it runs: by `fwidth`); its drops go round the bones
+and into them, and it fizzes. All of it is a matter of how far one has scrolled, so it runs
+backwards: that is a card's birth. The skeleton asks the cards where their balls are at the moment
+it draws (`guestsAt`), or they would lag the scroll by a frame. Everything is drawn once, out of
+sight, before the door opens. Where there is no skeleton to take it in, a ball fades there.
+
+**The hand in the water (`flow.ts`, 24 Nov).** The cursor does not drop rings on a lake any
+more: there is water over the whole screen — a coarse grid of it (81 by 38 on a laptop), worked
+out on the CPU in about a millisecond (stable fluids, its eddies kept alive in the wake only; a
+surface with waves, in FIXED steps of 1/100 s — a step that follows the frame turns to a
+checkerboard; how TORN each place is) and only while something moves: it comes to rest and stops.
+How torn follows how FAST the hand goes (nothing under about 200 px/s, all of it at 700): a slow
+hand, reading or on its way to a link, only ripples it. The background and every card are handed
+the numbers as two small half-float textures (`flowTexture`: what moves, and the surface's slopes
+— a slope read off a height between its neighbours shows the grid) and are bent and lit by them
+(`SURFACE_LIGHT`); the chain's blocks, the drifting words and the orbit's chips sway
+(`water.at`). A mouse stirs it, a press (a tap) is a hand put in; a finger that scrolls stirs
+nothing. In a shader read it with `textureLod`.
+
+**What the hand passes over comes APART (`scatter.ts`, 24 Nov).** Not only what is behind things:
+the name, the words, the photo, the skeleton, the cards ("the font is looking the same, the
+skeleton is looking the same… I thought my photo will scatter… erasing and again rejoin[ing]").
+Nothing on a page can reach the pixels of the rest of it, but the browser can, when it draws a
+pane of glass over it: a fixed pane whose `backdrop-filter: url(#…)` moves what is behind it by a
+picture (`feImage` → `feDisplacementMap`: red sideways, green down, blue whether at all). The
+picture is made every frame there is one to make: the screen is a honeycomb of 11 px cells; those
+the water has torn hard enough let go of their piece of the page, which goes with the water, out
+of the hand's way, and comes home. Over the pane a canvas (raw WebGL2) draws what the page has
+not got: the dark of the hole, the light on each piece, its shadow, dry strokes where the page
+was pulled. Things that matter: the picture is an UNCOMPRESSED BMP packed in a worker and shown
+by object URL (a data URL of that size costs 11 ms a frame, a PNG 30; an `href` to an element of
+the page draws nothing in a backdrop filter); between a piece and the rest the picture is the
+middle of both channels, or everything in between is drawn as outlines; it and the canvas's
+drawing of the same moment are shown in the same frame; the pane is no larger than what goes on
+(it costs by its area) and not there at rest; the first such filter and the first use of each
+shader stop the page, so all of it is drawn once, unseen, above the door; `backdrop-filter` is
+set from JavaScript (the stylesheet's builder drops what it does not know). Chromium only
+(`canScatter`); elsewhere `water.apart` stays true and the background's and the cards' own
+shaders come apart by themselves (`COME_APART`).
+A FINGER does it too (25 Nov: "in mobile too… if I move my touch I need to feel the same"): one
+that sets off SIDEWAYS, and then goes where it likes, and one that taps; one that sets off up or
+down scrolls the page, as ever (`.dev-root { touch-action: pan-y pinch-zoom }` on a coarse
+pointer). There the canvas over the pane is a plain 2D one drawn from four stamps (a phone keeps
+only a few WebGL contexts), the cells are larger, the picture finer (its steps are seen at 2.75),
+and a phone that cannot keep up gives it up by itself (`tooSlow`).
 
 **Smoothness rules (measured 0.3 → ~50 fps, 22 Nov).** No backdrop blur anywhere
 on the default page; no `filter: blur` on moving layers; no custom-property
 animations (they repaint every frame); no permanent animations on every card;
 motion inside cards is scroll-linked only. Check with a frame-time measurement,
 not by eye — and warm the browser up first (the first run is always slow).
+
+**Nothing asks the page where it is in the middle of a frame (24 Nov).** `scrollY`, `scrollX`,
+`getBoundingClientRect`, `offsetWidth` in a rAF loop or a scroll handler make the browser work
+out every style changed so far, on the spot (10–20 ms on a slow laptop), and again at the
+frame's end. Use `pageY()` (`scrollPos.ts`: a scroll timeline's own number; a phone is asked
+as before), boxes measured in ResizeObservers, sticky worked out by arithmetic (`box` in
+CrystalSpine), and in handlers read in a `setTimeout(0)`, when the frame is done. And what
+MOVES carries nothing: an element restyled every frame (an orbit chip, a card with a
+scroll-driven animation) has only its transform; its gradients, its `var()`s and its inherited
+text styles are on a child, or on the column (`.dev-words`). The drifting words are drawn by
+the chain's canvas on a desktop (thirty animated elements fewer). Find such things with a
+trace of `UpdateLayoutTree`/`Layout` with JavaScript stacks.
+
+**A 2D canvas is paid by the command, and a canvas drawn FROM by the canvas (24 Nov).** Thirty
+drifting words, each a small canvas of its own, thirty times a second, were more than half of
+what the page cost the graphics at rest: now they are one sheet, an `ImageBitmap`. The chain is
+drawn in a few shades, each in one stroke; the chrome of the name in slanted strips of 5 px. What
+does not change is handed over once (`kept` in plateKit). And a pointer handler asks the layout
+nothing in a stroke (`letterSwell` waits until the pointer slows: finding the letter under it is
+12 ms of every frame).
+
+**A scroll never waits for the graphics (24 Nov).** The hitches left in the scroll, 50–150 ms
+each, were all the page standing still for an answer from the GPU process:
+- a canvas given another size (`setSize`) as it was handed from card to card. The cards'
+  drawing surfaces are now made large enough behind the door, never made smaller, drawn in
+  only as far as the card needs (a viewport), and a card takes the smallest free one it fits
+  (`CardGL.ts`: `need`, `freeFor`, `presize`). The background on a phone is `100lvh`, so
+  the address bar sliding away does not resize it;
+- three asking about every shader the first time it is used: `quiet(renderer)` (`glGuard.ts`)
+  turns that off unless the address says `?glcheck`, and everything a renderer draws is drawn
+  once, unseen, behind the door (with its camera in place: what is culled is not warmed);
+- `new AudioContext()` (music, below).
+Find them with a wrapper round the GL calls that logs any that take over 8 ms with a stack,
+or a trace (`GLES2::GetGLError`, `CheckFramebufferStatus`, `GetProgramiv` on the main
+thread). In a shader never `pow()` something that can be negative (garbage on some phones):
+`sq2()`. Hold the page behind a popup with `holdScroll()` (`scrollLock.ts`, on the
+`<html>`): a body told to hide its overflow becomes a scroll box, and every sticky thing in
+it lets go. A canvas steps its sharpness down only when its GPU time AND the page's frames
+are late (`sharp.ts`): a chip with little to do slows its clock and reads high.
 
 **The background (`DustField.tsx`, `decor`).** One WebGL layer under the
 content. For the Chain design it also paints the room — the corner washes, three
@@ -206,7 +364,7 @@ light (on its own real-time clock; a grain's angle is the disc's turn plus a twi
 depends only on how far in it is — never clock × speed-at-this-radius, which whirled
 faster the longer the page was open), more dust drawn up into it from round the first
 bones — which condense out of the dust, small and loose,
-before settling — opening like an iris when the spine first comes into view; the
+before settling — forming, as the site opens, out of the dust that comes home to it; the
 spine's core light rises out of its heart. The lane reaches `SPINE_HEAD` (130 px) above
 the column for it. THE BOTTOM: over the column's last 320 px the vertebrae break apart
 while interlocking links form among them, and the chain is lowered to just through the
@@ -277,12 +435,16 @@ top). Chosen only behind the PS door (`look` in `portrait.json`); `PortraitLooks
 holds the SVG filters (graded, duotone, the hologram's colour fringes) built from the live
 theme.
 
-**The Template (`copy.ts`).** Every editable text has a key and its original words; the
-page reads `word(copy, key)` from DevContext; his changes live in `texts.json` (owner panel
-→ Template, `PUT /dev-site/texts`): his name with its font (serif, sans, mono) and colour
-(the sheen, the theme's gradient, gold, plain, two colours of his), the greeting, role,
-company, place, the menu's line, the finale's words, a title. Live as he types; one click
-puts every word back. A new editable text is one line in `copy.ts`.
+**The Template (`copy.ts`, `words.ts`).** It reaches EVERY word of the page: the name's
+area, the menu, the door, all nine cards (headings, labels and their data), the finale, the
+award room, the links. Every editable text has a key and its original words, in groups
+(`COPY_GROUPS`); pages read `word(copy, key)`, and a design that needs the facts reads
+`useData()` — the same facts built from his words (`dataOf`). His changes live in
+`texts.json` (owner panel → Template, `PUT /dev-site/texts`): live as he types, a search box
+over all of them, "bring it back" beside each; a word left empty is left out of the page. A
+new editable text is one line in `copy.ts`. The name's font, colour and design are there too.
+On a wide screen the Template stands at one side with the page in clear view beside it, and
+clicking into a word takes the page to where it stands (`whereItSays`).
 
 **The name's area (`Nameplate.tsx`, `plates.ts`, `PlateDesigns.tsx`).** HELLO I'M · the
 name · role and company · place and time, in the design chosen in the Template
@@ -320,24 +482,51 @@ cursor) and `CardChrome` (the slot a card's WebGL canvas goes into).
 in three tiers per id `pNN`: `full/` (1800px WebP), `thumb/` (720px) and a 24px
 LQIP inline in `album.json`. Tap the portrait to open it.
 
-**The award room (`app/award`, `AwardStage.tsx`, `chestBits.ts`, `awardFiles.ts`).**
-A real room (three.js): a photo-scanned chest and cross-pein hammer on a sandstone floor
-(Poly Haven, CC0; the chest's vertices quantized with KHR_mesh_quantization), studio
-environment light, VSM soft shadows, seen three-quarters. The hammer is held from your side,
-raised, and follows the mouse; a tap swings it down in 75 ms onto the spot tapped, and the
-blow's sound is SCHEDULED on the audio clock to be heard on that frame (the output latency
-taken off; every sound file starts at its own attack). Sparks, dust, a dent left in the
-wood, a dead stop, a recoil. The last blow: the lock snaps off and clanks to rest on its
-back, the lid bursts open, the gold inside lights up, coins leap out, bounce (each heard)
-and settle, light pours out, and the "1 GRAM" coin rises. Everything is drawn once unseen
-before the room appears, so the first blow has nothing to compile. The canvas stays
-hidden until its first full frame (no half-loaded flashes), the hammer lands on
-the sound, DPR is capped at 1.5. Its music is the owner's chosen track ("Ancient
-Empire" by The Mountain, 128 kbps) at `music/award-ancient-empire.mp3` in the
-bucket (`AWARD_TRACK` in `dev/music.ts`): it fades in to ~45%, loops, shares the
-site's mute, starts on the first tap if the browser holds sound back, and is
-fetched during the intro. Like the other songs it lives in S3, not in this repo.
-Its rank link opens page 35 of the university rank list PDF.
+**The award room (`app/award`, `AwardStage.tsx`, `awardRoom.ts`, `awardHall.ts`,
+`awardCoin.ts`, `awardLens.ts`, `awardDoor.ts`, `AwardLink.tsx`, `chestBits.ts`,
+`awardFiles.ts`, `Kural.tsx`).** An ancient hall (three.js), entered through a pair of bronze doors with
+no loading icon. On a desktop the whole room — scene, pictures, shaders, first frame — is
+built in the profile page's idle moments as the way in comes near (`warmAward`) and handed
+over; a phone, whose graphics memory the profile needs, gets the files early and builds
+behind the doors. The back wall is carved
+(24–25 Nov, `ops/art/bake_wall.py`: 4096 wide, handed on as what the light needs — its SLOPES, an
+8-bit height has steps a raking light shows — how open and how worn each place is, its height for
+how it hides itself, its gold; a phone has the middle of it, at its own sharpness): a temple
+wheel, pilasters, elephants, arches, lotus bands, creepers, courses of cut stone; weathered, with
+petals on a floor that mirrors it. In it, on two panels (one band on a tall screen), THIRUKKURAL
+400 in Tamil, cut by the shader from a distance field (sharp at any size): under the visitor's
+light it turns to English and back (`uTell`), and in the smallest letters under it stand the whole
+couplet and what it says. A click on it — or on the quote, one clear line over the coin, with no
+Tamil behind it — opens its palm leaves (`Kural.tsx`): the couplet, how it is said, its words one
+by one, what it means, what it has meant to him; all of it his, in the Template (the Kural keys of
+`copy.ts`). THE POINTER IS A TORCH: a point light with its own shadow map
+travels with it (a finger on a phone), and a light over the WHOLE screen (`.award-shade`); the dark
+brightens where it goes; the lamps catch from it; dust turns in its light.
+A photo-scanned chest and cross-pein hammer (Poly Haven, CC0; simplified) seen
+three-quarters. The hammer follows the mouse; a tap swings it down in 75 ms onto the spot
+tapped, and the blow's sound is SCHEDULED on the audio clock to be heard on that frame (the
+output latency taken off; every sound file starts at its own attack). Sparks, dust, a dent
+left in the wood, a dead stop, a recoil. The last blow: the lock snaps off and clanks to
+rest on its back, the lid bursts open, the gold inside lights up, coins leap out, bounce
+(each heard) and settle, light pours out, and the COIN rises: struck, not painted — relief,
+inscriptions, a reeded edge, its field dark under a raking light, so its details are read straight
+on (`strikeFace`). It is turned by hand (a drag; it settles); a click goes to the link he set in
+the Template (`coinLink`). No label under it.
+Every picture and bone is asked for again where it does not come or cannot be read (`ask.ts`, past
+the browser's own copy): one of eighteen that did not was a WHITE chest on his phone (25 Nov); what
+still has none is its own colour, never white. Under the light one brings, the letters in the wall
+are ink (gold on lit stone does not read); a coin's rim is a lathe listed from the outside in (the
+other way round it is hollow).
+Costs, on an Intel UHD 620 (his laptop): VSM shadows were 28 of 42 ms (PCF now), full-screen
+MSAA 8 ms (its own small HDR lens with bloom and FXAA 5 ms, desktop only), a runtime PMREM
+3 s (baked: `env.webp`), and `compileAsync` must run with the same render target bound or
+everything is built twice. The pictures (wall, gold inlay, coin faces, env, doors) are made
+offline by the scripts in `ops/art`.
+Its music is the owner's chosen track ("Ancient Empire" by The Mountain, 128 kbps) at
+`music/award-ancient-empire.mp3` in the bucket (`AWARD_TRACK` in `dev/music.ts`): it fades
+in to ~45%, loops, shares the site's mute, starts on the first tap if the browser holds
+sound back, and is fetched during the intro. Like the other songs it lives in S3, not in
+this repo. Its rank link opens page 35 of the university rank list PDF.
 
 It never ends in an error page (`chunks.ts`, `Medal.tsx`). Every lazily loaded piece comes
 through `arrive()`: if its code is missing — a page left open across a deploy — the page
@@ -385,7 +574,7 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   bare "Choose File" boxes did not open inside the panel): upload photos to the
   album (≤20 at a time) and remove them;
   upload songs, rename, reorder, choose where each plays (everywhere / site only
-  / album only), set the default volume; set the PORTRAIT — add, remove,
+  / album only), set the default volume and HOW THE MUSIC BEGINS; set the PORTRAIT — add, remove,
   reorder his photos and the seconds each one shows (`POST`/`PUT
   /dev-site/portrait`); REPLACE THE RÉSUMÉ — a new PDF (≤6
   pages, <10 MB) and optionally its Word file: the server draws the pages with
@@ -417,7 +606,16 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   from its first song; closing it returns to the site playlist. A visitor's mute
   and volume are remembered on their device. The award room plays its own track
   (above) and shares the mute.
-- `music.json`: `{"tracks":[{"id","title","file","scope":"landing|album|both"}],"volume":0.6}`.
+- A browser refuses sound before the visitor has touched the page, and nothing is pressed
+  on the way in: the music begins with the FIRST touch, click or key anywhere (`arm`), or at
+  once where the browser allows it (`wake`). Until then a few quiet words stand beside the
+  note for a while (`soundHint` in the Template). The audio graph is made while the page
+  loads: `new AudioContext()` stops the main thread for 0.2–1.9 s.
+- `music.json`: `{"tracks":[{"id","title","file","scope":"landing|album|both"}],"volume":0.6,"start":"auto|touch|button"}`.
+  `start` is how it begins (owner panel → Sound): by itself where the browser allows it (else at
+  the first touch), at the first touch anywhere, or only by the music button (the award room
+  waits for it too: `musicWaits`). `music.ts` is a client module: the page (a server one) may
+  import its types only.
 - **The song files live in S3 only, not in this repo** — the owner's choice. The
   live playlist is his licensed ringtone "Zulfein", streamed from the bucket's
   `dev-site/music/`; he downloads it from there when needed. The mirror's
@@ -434,7 +632,7 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
 3. **Never write "just" or "only"** in the site's copy: it reads as boastful
    or dismissive.
 4. **Single click shows details, double click edits** (behind the password).
-5. **Load everything before ENTER** so nothing lags once inside.
+5. **Load everything before the site opens** (by itself: no button) so nothing lags once inside.
 6. **Every date-based number is live** and visibly running.
 7. Photos and the résumé are his own and already public on his Instagram and
    the live site; this repo was made public with his approval. They are **not**
@@ -446,6 +644,9 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
   screenshots. Launch plain Chromium for the profile (SwiftShader flags make its
   canvases stall screenshots); use `--use-angle=swiftshader
   --enable-unsafe-swiftshader` for `/award` in headless runs.
+- **The door:** wait for `[data-boot]` to be gone; there is nothing to click. Playwright's
+  `evaluate`/`waitForFunction` count as a user gesture: to test what a visitor really hears,
+  use a raw CDP `Runtime.evaluate` with `userGesture: false`.
 - **Phone overflow:** a CSS grid with no explicit columns sizes its one track
   to the content's min-content width; a row of fixed cells then pushes the whole
   column past the screen edge. The Chain layout uses
@@ -464,9 +665,9 @@ in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.
 ## 11. Credits and licences
 
 - 3D models and textures: Poly Haven, **CC0** — Treasure Chest (Rico Cilliers), Cross Pein
-  Hammer (Tics), Large Sandstone Blocks 01 (Rob Tuytel); see `public/dev/models/CREDITS.md`.
+  Hammer (Tics), Large Sandstone Blocks 01 and Sandstone Blocks 08 (Rob Tuytel); see `public/dev/models/CREDITS.md`.
 - Sound effects: **Mixkit Free License** (see `public/dev/sfx/CREDITS.md`).
-- Fonts: Geist and Geist Mono (OFL), Fraunces (OFL), Cinzel (OFL).
+- Fonts: Geist and Geist Mono (OFL), Fraunces (OFL), Cinzel (OFL); the hall's verse is set in Noto Serif Tamil (OFL).
 - Photos, résumé, rank list and personal text: © Pandian Sambath, all rights
   reserved.
 - The site was built with AI-assisted development.

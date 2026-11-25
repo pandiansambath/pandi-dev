@@ -20,12 +20,11 @@
 // scene with fewer embers and the object above the words.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow } from "./context";
+import { chennaiTime, elapsed, useDev, useNow, useData } from "./context";
 import { ResumeActions } from "./designKit";
-import { PROJECT, VOLUNTEERING, honours } from "./profile";
-import { CLUSTERS, EDUCATION } from "./skills";
+import { honours } from "./profile";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas } from "./glGuard";
+import { compiled, guardCanvas, quiet } from "./glGuard";
 
 const CHAPTERS = ["Hello", "Time", "Recognition", "Skills", "DineAI", "Say hello"];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -55,6 +54,8 @@ function useEmberScene(
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: !phone, alpha: true, powerPreference: "high-performance" });
+
+      quiet(renderer);
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, phone ? 1.5 : 1.75));
@@ -261,7 +262,7 @@ function useEmberScene(
       // GPU allows. Compiled on first draw instead, the chrome's physical
       // material froze the page for seconds and held the intro up (22 Nov).
       try {
-        await renderer.compileAsync(scene, camera);
+        await compiled(renderer, scene, camera);
       } catch {
         /* older drivers: it compiles on first draw instead */
       }
@@ -472,6 +473,7 @@ function Chapter({
 // ── The design ──────────────────────────────────────────────────────────────
 
 export function EmberDesign() {
+  const { CAREER_START, CLUSTERS, EDUCATION, EMAIL, LINKS, PROJECT, VOLUNTEERING } = useData();
   const { entered, milestones, photos, openAlbum, toast } = useDev();
   const now = useNow();
   const exp = now ? elapsed(CAREER_START, now) : null;

@@ -45,6 +45,8 @@ body {
    when you turn it in the light. The band is only 12% of the width, so most
    of the cycle is still gold and the shine is an event rather than a state. */
 .dev-gold {
+  /* (The cards' dark edge to their letters would be painted over the gold.) */
+  text-shadow: none;
   /* More stops than a gradient needs, on purpose. Metal is not a smooth ramp
      between two browns — it is dark, then suddenly bright, then dark again,
      because a curved surface turns the light through the eye quickly. The
@@ -53,17 +55,19 @@ body {
      rather than a single pane of glass sliding past. */
   background: linear-gradient(
     98deg,
-    #7a4718 0%,
-    #b8752e 14%,
+    #b8752e 0%,
+    #d2963f 14%,
     #f0bd6a 27%,
     #fffaf0 34%,
     #f4c877 41%,
-    #c98436 52%,
+    #d0903f 52%,
     #ffeec2 62%,
-    #d2913f 74%,
-    #a8641f 88%,
-    #7a4718 100%
+    #eab45c 74%,
+    #dba04a 88%,
+    #c48436 100%
   );
+  /* (Its dark end a little lighter than it was: at rest that is the part in sight, and on a
+     phone, over the water, it read as bronze.) */
   background-size: 300% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -253,10 +257,13 @@ body {
    the child against the CARD, not the page, and could stick at invisible.
    Everything inside a card now follows the card's named timeline, --dev-card,
    which the card measures against the page. */
+/* Half the gap between the columns: the axis the cards revolve about. */
+@media (min-width: 1280px) { .dev-root { --d-half-gap: 4rem; } }
 /* THE ORBIT, fourth pass (22 Nov, evening). A card's LOOK is drawn in WebGL
-   now (CardGL.ts): dark glass with the theme's water in the centre, curving
-   like a piece of the cylinder it travels round as it turns away, dissolving
-   into a living orb while it is away, stirred by the cursor. CSS keeps only
+   now (CardGL.ts): dark glass with the theme's water in the centre, winding itself up
+   into a ball as it leaves and out of one as it comes (24 Nov: so the turn in
+   rotateY is all but gone from here — it is in the drawing, and a round ball
+   is not seen from its side), stirred by the cursor. CSS keeps only
    what CSS does best: moving the card round the divider (a compositor
    transform, below) and showing its words in the present.
 
@@ -266,66 +273,107 @@ body {
    budget: tiles thrown away and painted again mid-scroll, which he saw as
    the cards flickering, and the lag with it.
 
-   The path round the divider: at angle phi the card's centre sits at
-   (D*cos(phi) - D, 0, -Rz*(1 - cos(phi))) from its own place, D being the
-   distance from the divider to the card's middle (half the card plus half
-   the 5.5rem gap). A phone has one column with the divider down its middle,
-   so there a card swings out to the side and back. No z-index in the
-   keyframes (that pulls the orbit onto the main thread): the divider and the
-   portrait column sit above the cards for good. */
+   TO THE DIVIDER, AND INTO IT (24 Nov, §106.13): a card that has wound itself
+   up goes no further than the skeleton, and there it dissolves into the bones;
+   it comes out of them as it arrives. As it lets go of its place it floats (the
+   page goes on under it: it moves down by about half its own height), so that
+   this is seen a fifth of the way down the screen, not at its very edge. D is
+   the distance from the divider to the card's middle (half the card plus half
+   the gap). A phone has one column with the divider down its middle, so there a
+   card swings out to the side and back. No z-index in the keyframes (that pulls
+   the orbit onto the main thread): the divider and the portrait column sit above
+   the cards for good. THE SAME NUMBERS are in dev/orbit.ts, for what draws the
+   ball: change both. */
 @keyframes devRevolve {
-  0%   { transform: perspective(1800px) translate3d(calc(-2 * (50% + 2.75rem)), 0, -520px) rotateY(52deg) scale(.42); }
-  12%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 2.75rem)), 0, -459px) rotateY(44deg) scale(.48); }
-  24%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 2.75rem)), 0, -283px) rotateY(30deg) scale(.66); }
-  34%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 2.75rem)), 0, -93px) rotateY(14deg) scale(.88); }
-  40%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  60%  { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  66%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 2.75rem)), 0, -93px) rotateY(-14deg) scale(.88); }
-  76%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 2.75rem)), 0, -283px) rotateY(-30deg) scale(.66); }
-  88%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 2.75rem)), 0, -459px) rotateY(-44deg) scale(.48); }
-  100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + 2.75rem)), 0, -520px) rotateY(-52deg) scale(.42); }
+  0%, 20% { transform: perspective(1800px) translate3d(calc(-1.1389 * (50% + var(--d-half-gap, 2.75rem))), -52.39%, -250px) rotateY(0deg) scale(0.7289); }
+  22%   { transform: perspective(1800px) translate3d(calc(-1.1032 * (50% + var(--d-half-gap, 2.75rem))), -49.32%, -243px) rotateY(1.55deg) scale(0.7378); }
+  24%   { transform: perspective(1800px) translate3d(calc(-1.0075 * (50% + var(--d-half-gap, 2.75rem))), -41.47%, -224px) rotateY(2.94deg) scale(0.7617); }
+  26%   { transform: perspective(1800px) translate3d(calc(-0.8694 * (50% + var(--d-half-gap, 2.75rem))), -30.93%, -196px) rotateY(4.05deg) scale(0.7959); }
+  28%   { transform: perspective(1800px) translate3d(calc(-0.7063 * (50% + var(--d-half-gap, 2.75rem))), -19.73%, -162px) rotateY(4.76deg) scale(0.8357); }
+  30%   { transform: perspective(1800px) translate3d(calc(-0.5347 * (50% + var(--d-half-gap, 2.75rem))), -9.75%, -125px) rotateY(5deg) scale(0.8769); }
+  32%   { transform: perspective(1800px) translate3d(calc(-0.3692 * (50% + var(--d-half-gap, 2.75rem))), -2.67%, -88px) rotateY(4.76deg) scale(0.916); }
+  34%   { transform: perspective(1800px) translate3d(calc(-0.2225 * (50% + var(--d-half-gap, 2.75rem))), 0%, -54px) rotateY(4.05deg) scale(0.9499); }
+  36%   { transform: perspective(1800px) translate3d(calc(-0.1055 * (50% + var(--d-half-gap, 2.75rem))), 0%, -26px) rotateY(2.94deg) scale(0.9765); }
+  38%   { transform: perspective(1800px) translate3d(calc(-0.0281 * (50% + var(--d-half-gap, 2.75rem))), 0%, -7px) rotateY(1.55deg) scale(0.9938); }
+  40%   { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  60%   { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  62%   { transform: perspective(1800px) translate3d(calc(-0.0281 * (50% + var(--d-half-gap, 2.75rem))), 0%, -7px) rotateY(-1.55deg) scale(0.9938); }
+  64%   { transform: perspective(1800px) translate3d(calc(-0.1055 * (50% + var(--d-half-gap, 2.75rem))), 0%, -26px) rotateY(-2.94deg) scale(0.9765); }
+  66%   { transform: perspective(1800px) translate3d(calc(-0.2225 * (50% + var(--d-half-gap, 2.75rem))), 0%, -54px) rotateY(-4.05deg) scale(0.9499); }
+  68%   { transform: perspective(1800px) translate3d(calc(-0.3692 * (50% + var(--d-half-gap, 2.75rem))), 2.67%, -88px) rotateY(-4.76deg) scale(0.916); }
+  70%   { transform: perspective(1800px) translate3d(calc(-0.5347 * (50% + var(--d-half-gap, 2.75rem))), 9.75%, -125px) rotateY(-5deg) scale(0.8769); }
+  72%   { transform: perspective(1800px) translate3d(calc(-0.7063 * (50% + var(--d-half-gap, 2.75rem))), 19.73%, -162px) rotateY(-4.76deg) scale(0.8357); }
+  74%   { transform: perspective(1800px) translate3d(calc(-0.8694 * (50% + var(--d-half-gap, 2.75rem))), 30.93%, -196px) rotateY(-4.05deg) scale(0.7959); }
+  76%   { transform: perspective(1800px) translate3d(calc(-1.0075 * (50% + var(--d-half-gap, 2.75rem))), 41.47%, -224px) rotateY(-2.94deg) scale(0.7617); }
+  78%   { transform: perspective(1800px) translate3d(calc(-1.1032 * (50% + var(--d-half-gap, 2.75rem))), 49.32%, -243px) rotateY(-1.55deg) scale(0.7378); }
+  80%, 100% { transform: perspective(1800px) translate3d(calc(-1.1389 * (50% + var(--d-half-gap, 2.75rem))), 52.39%, -250px) rotateY(0deg) scale(0.7289); }
 }
 @keyframes devRevolvePhone {
-  0%   { transform: perspective(1200px) translate3d(-40px, 0, -200px) rotateY(48deg) scale(.5); }
-  15%  { transform: perspective(1200px) translate3d(-70px, 0, -150px) rotateY(38deg) scale(.58); }
-  27%  { transform: perspective(1200px) translate3d(-60px, 0, -70px) rotateY(24deg) scale(.76); }
-  35%  { transform: perspective(1200px) translate3d(-26px, 0, -14px) rotateY(10deg) scale(.93); }
-  40%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  60%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateY(-10deg) scale(.93); }
-  73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateY(-24deg) scale(.76); }
-  85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateY(-38deg) scale(.58); }
-  100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateY(-48deg) scale(.5); }
+  0%, 22% { transform: perspective(1200px) translate3d(0px, -30.45%, -60px) rotateY(0deg) scale(0.882); }
+  23.8% { transform: perspective(1200px) translate3d(-9.74px, -28.93%, -58.3px) rotateY(1.55deg) scale(0.8855); }
+  25.6% { transform: perspective(1200px) translate3d(-20.98px, -24.98%, -53.8px) rotateY(2.94deg) scale(0.895); }
+  27.4% { transform: perspective(1200px) translate3d(-30.62px, -19.53%, -47px) rotateY(4.05deg) scale(0.9088); }
+  29.2% { transform: perspective(1200px) translate3d(-36.94px, -13.48%, -38.9px) rotateY(4.76deg) scale(0.9254); }
+  31%   { transform: perspective(1200px) translate3d(-38.95px, -7.71%, -30px) rotateY(5deg) scale(0.943); }
+  32.8% { transform: perspective(1200px) translate3d(-36.41px, -3.07%, -21.1px) rotateY(4.76deg) scale(0.9603); }
+  34.6% { transform: perspective(1200px) translate3d(-29.79px, -0.37%, -13px) rotateY(4.05deg) scale(0.9759); }
+  36.4% { transform: perspective(1200px) translate3d(-20.19px, 0%, -6.2px) rotateY(2.94deg) scale(0.9885); }
+  38.2% { transform: perspective(1200px) translate3d(-9.3px, 0%, -1.7px) rotateY(1.55deg) scale(0.9969); }
+  40%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  60%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  61.8% { transform: perspective(1200px) translate3d(9.3px, 0%, -1.7px) rotateY(-1.55deg) scale(0.9969); }
+  63.6% { transform: perspective(1200px) translate3d(20.19px, 0%, -6.2px) rotateY(-2.94deg) scale(0.9885); }
+  65.4% { transform: perspective(1200px) translate3d(29.79px, 0.37%, -13px) rotateY(-4.05deg) scale(0.9759); }
+  67.2% { transform: perspective(1200px) translate3d(36.41px, 3.07%, -21.1px) rotateY(-4.76deg) scale(0.9603); }
+  69%   { transform: perspective(1200px) translate3d(38.95px, 7.71%, -30px) rotateY(-5deg) scale(0.943); }
+  70.8% { transform: perspective(1200px) translate3d(36.94px, 13.48%, -38.9px) rotateY(-4.76deg) scale(0.9254); }
+  72.6% { transform: perspective(1200px) translate3d(30.62px, 19.53%, -47px) rotateY(-4.05deg) scale(0.9088); }
+  74.4% { transform: perspective(1200px) translate3d(20.98px, 24.98%, -53.8px) rotateY(-2.94deg) scale(0.895); }
+  76.2% { transform: perspective(1200px) translate3d(9.74px, 28.93%, -58.3px) rotateY(-1.55deg) scale(0.8855); }
+  78%, 100% { transform: perspective(1200px) translate3d(0px, 30.45%, -60px) rotateY(0deg) scale(0.882); }
 }
-/* What is written on a card: only in the present — arriving once the card has
-   all but opened out of its orb (CardGL: open by 36%) and gone before it
-   starts to fold away (64%), so words never float over a half-made card. */
+/* What is written on a card, as the page's own text: only in the present. Either side of
+   that its words are on the sheet that winds and unwinds (cardInk, CardGL `ink`), in the
+   same places: these go out, and come, in the few pixels of scroll in which the painted
+   ones come and go — and do not move, or the two would be seen apart (§104.11). */
 @keyframes devChainReveal {
-  0%, 36%   { opacity: 0; transform: translateY(16px); }
-  40%, 60%  { opacity: 1; transform: translateY(0); }
-  64%, 100% { opacity: 0; transform: translateY(-10px); }
+  0%, 39.76%      { opacity: 0; }
+  39.96%, 60.04%  { opacity: 1; }
+  60.24%, 100%    { opacity: 0; }
 }
 /* The first card on a desktop: only the leaving half of a life, over its exit
    (it is in the present when the page opens, on any screen). */
 @keyframes devRevolveOut {
-  0%   { transform: perspective(1800px) translate3d(0px, 0, 0px) rotateY(0deg) scale(1); }
-  15%  { transform: perspective(1800px) translate3d(calc(-0.357 * (50% + 2.75rem)), 0, -93px) rotateY(-14deg) scale(.88); }
-  40%  { transform: perspective(1800px) translate3d(calc(-1.087 * (50% + 2.75rem)), 0, -283px) rotateY(-30deg) scale(.66); }
-  70%  { transform: perspective(1800px) translate3d(calc(-1.766 * (50% + 2.75rem)), 0, -459px) rotateY(-44deg) scale(.48); }
-  100% { transform: perspective(1800px) translate3d(calc(-2 * (50% + 2.75rem)), 0, -520px) rotateY(-52deg) scale(.42); }
+  0%    { transform: perspective(1800px) translate3d(0px, 0%, 0px) rotateY(0deg) scale(1); }
+  5%    { transform: perspective(1800px) translate3d(calc(-0.0281 * (50% + var(--d-half-gap, 2.75rem))), 0%, -7px) rotateY(-1.55deg) scale(0.9938); }
+  10%   { transform: perspective(1800px) translate3d(calc(-0.1055 * (50% + var(--d-half-gap, 2.75rem))), 0%, -26px) rotateY(-2.94deg) scale(0.9765); }
+  15%   { transform: perspective(1800px) translate3d(calc(-0.2225 * (50% + var(--d-half-gap, 2.75rem))), 0%, -54px) rotateY(-4.05deg) scale(0.9499); }
+  20%   { transform: perspective(1800px) translate3d(calc(-0.3692 * (50% + var(--d-half-gap, 2.75rem))), 2.67%, -88px) rotateY(-4.76deg) scale(0.916); }
+  25%   { transform: perspective(1800px) translate3d(calc(-0.5347 * (50% + var(--d-half-gap, 2.75rem))), 9.75%, -125px) rotateY(-5deg) scale(0.8769); }
+  30%   { transform: perspective(1800px) translate3d(calc(-0.7063 * (50% + var(--d-half-gap, 2.75rem))), 19.73%, -162px) rotateY(-4.76deg) scale(0.8357); }
+  35%   { transform: perspective(1800px) translate3d(calc(-0.8694 * (50% + var(--d-half-gap, 2.75rem))), 30.93%, -196px) rotateY(-4.05deg) scale(0.7959); }
+  40%   { transform: perspective(1800px) translate3d(calc(-1.0075 * (50% + var(--d-half-gap, 2.75rem))), 41.47%, -224px) rotateY(-2.94deg) scale(0.7617); }
+  45%   { transform: perspective(1800px) translate3d(calc(-1.1032 * (50% + var(--d-half-gap, 2.75rem))), 49.32%, -243px) rotateY(-1.55deg) scale(0.7378); }
+  50%, 100% { transform: perspective(1800px) translate3d(calc(-1.1389 * (50% + var(--d-half-gap, 2.75rem))), 52.39%, -250px) rotateY(0deg) scale(0.7289); }
 }
 /* The first card on a phone sits below the portrait when the page opens. It
    arrives as a curved card with its words — "like below we have that card,
    that kind of feel" — tilted back and rising, not as an orb; it leaves like
    the rest. One function list throughout, so it interpolates cleanly. */
 @keyframes devRevolvePhoneFirst {
-  0%   { transform: perspective(1200px) translate3d(0px, 0, -90px) rotateX(18deg) rotateY(0deg) scale(.9); }
-  40%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
-  60%  { transform: perspective(1200px) translate3d(0px, 0, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
-  65%  { transform: perspective(1200px) translate3d(26px, 0, -14px) rotateX(0deg) rotateY(-10deg) scale(.93); }
-  73%  { transform: perspective(1200px) translate3d(60px, 0, -70px) rotateX(0deg) rotateY(-24deg) scale(.76); }
-  85%  { transform: perspective(1200px) translate3d(70px, 0, -150px) rotateX(0deg) rotateY(-38deg) scale(.58); }
-  100% { transform: perspective(1200px) translate3d(40px, 0, -200px) rotateX(0deg) rotateY(-48deg) scale(.5); }
+  0%    { transform: perspective(1200px) translate3d(0px, 0%, -90px) rotateX(18deg) rotateY(0deg) scale(.9); }
+  40%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
+  60%   { transform: perspective(1200px) translate3d(0px, 0%, 0px) rotateX(0deg) rotateY(0deg) scale(1); }
+  61.8% { transform: perspective(1200px) translate3d(9.3px, 0%, -1.7px) rotateX(0deg) rotateY(-1.55deg) scale(0.9969); }
+  63.6% { transform: perspective(1200px) translate3d(20.19px, 0%, -6.2px) rotateX(0deg) rotateY(-2.94deg) scale(0.9885); }
+  65.4% { transform: perspective(1200px) translate3d(29.79px, 0.37%, -13px) rotateX(0deg) rotateY(-4.05deg) scale(0.9759); }
+  67.2% { transform: perspective(1200px) translate3d(36.41px, 3.07%, -21.1px) rotateX(0deg) rotateY(-4.76deg) scale(0.9603); }
+  69%   { transform: perspective(1200px) translate3d(38.95px, 7.71%, -30px) rotateX(0deg) rotateY(-5deg) scale(0.943); }
+  70.8% { transform: perspective(1200px) translate3d(36.94px, 13.48%, -38.9px) rotateX(0deg) rotateY(-4.76deg) scale(0.9254); }
+  72.6% { transform: perspective(1200px) translate3d(30.62px, 19.53%, -47px) rotateX(0deg) rotateY(-4.05deg) scale(0.9088); }
+  74.4% { transform: perspective(1200px) translate3d(20.98px, 24.98%, -53.8px) rotateX(0deg) rotateY(-2.94deg) scale(0.895); }
+  76.2% { transform: perspective(1200px) translate3d(9.74px, 28.93%, -58.3px) rotateX(0deg) rotateY(-1.55deg) scale(0.8855); }
+  78%, 100% { transform: perspective(1200px) translate3d(0px, 30.45%, -60px) rotateX(0deg) rotateY(0deg) scale(0.882); }
 }
 /* …and no opacity here: a group whose opacity may animate is drawn to a picture
    of its own first, and inside a card tilted in perspective the browser makes
@@ -333,12 +381,11 @@ body {
    rest, on the first screen. The card says when it is leaving (CardGL:
    data-away) and a short transition fades them. */
 @keyframes devChainRevealFirstPhone {
-  0%, 60%   { transform: translateY(0); }
-  64%, 100% { transform: translateY(-10px); }
+  0%, 100% { transform: translateY(0); }
 }
 @keyframes devChainRevealOut {
-  0%        { opacity: 1; transform: translateY(0); }
-  10%, 100% { opacity: 0; transform: translateY(-10px); }
+  0%, .35%  { opacity: 1; }
+  .8%, 100% { opacity: 0; }
 }
 /* A title arrives with a glitch and settles clean. Opacity and transform
    only: the old split-colour text-shadow and clip slices ran on the main
@@ -381,6 +428,7 @@ body {
   pointer-events: none;
 }
 [data-design="chain"] .dev-reborn[data-link] > .blur-3xl { display: none; }
+[data-design="chain"] .dev-reborn[data-link][data-rolled] { pointer-events: none; }
 .dev-glslot {
   position: absolute;
   inset: -56px;
@@ -388,6 +436,42 @@ body {
 }
 @media (min-width: 768px) {
   .dev-glslot { inset: -80px; }
+}
+/* The light dies while its pieces hang there (a dark over the page, under the skeleton), and
+   gives a little at every beat of the heart (spineBreak BEATS). */
+[data-dark] { opacity: 0; background: #020305; }
+.dev-root[data-shatter] [data-dark] { animation: devDark 6.92s linear both; }
+@keyframes devDark {
+  0%, 9% { opacity: 0; }
+  12% { opacity: .1; }
+  23% { opacity: .66; }
+  32% { opacity: .68; }
+  33.4% { opacity: .5; }
+  35.2% { opacity: .66; }
+  36.8% { opacity: .42; }
+  39.6% { opacity: .65; }
+  45.2% { opacity: .63; }
+  46.4% { opacity: .46; }
+  48.2% { opacity: .6; }
+  49.8% { opacity: .36; }
+  53% { opacity: .54; }
+  58.2% { opacity: .47; }
+  59.4% { opacity: .32; }
+  61% { opacity: .42; }
+  62.8% { opacity: .22; }
+  66% { opacity: .32; }
+  82%, 100% { opacity: 0; }
+}
+@media (max-width: 1023px) { .dev-root[data-shatter] [data-dark] { animation-name: devDarkPhone; } }
+@keyframes devDarkPhone { 0%, 10% { opacity: 0; } 24%, 45% { opacity: .34; } 82%, 100% { opacity: 0; } }
+/* (The line of light down its core goes dark with it: §104.3.) */
+[data-spine] [data-cord] { transition: opacity 1.4s ease; }
+.dev-root[data-shatter] [data-spine] [data-cord] { opacity: .05; transition: opacity .9s ease .7s; }
+/* A phone's skeleton stands behind the cards: while it breaks (§104.3) their glass thins, so
+   it is seen. */
+@media (max-width: 1023px) {
+  .dev-reborn .dev-glcanvas { transition: opacity .5s ease; }
+  .dev-root[data-shatter] .dev-reborn .dev-glcanvas { opacity: .34; }
 }
 .dev-glcanvas {
   position: absolute;
@@ -415,11 +499,12 @@ body {
       animation-timeline: --dev-card;
       animation-range: cover 0% cover 100%;
     }
-    [data-design="chain"] .dev-reborn[data-link] .dev-wave {
-      animation: devGlitch linear both;
-      animation-timeline: --dev-card;
-      animation-range: cover 33% cover 43%;
-    }
+    /* (Its words come with the sheet: no title glitches in, no chip pops up by itself.) */
+    [data-design="chain"] .dev-reborn[data-link] .dev-wave,
+    [data-design="chain"] .dev-reborn[data-link] .dev-chip { animation: none; }
+    /* A card being read, to have its words painted: as it is at rest (cardInk). */
+    [data-design="chain"] .dev-reborn[data-inking],
+    [data-design="chain"] .dev-reborn[data-inking] > * { animation: none !important; transform: none !important; opacity: 1 !important; transition: none !important; }
     /* The first card is already in the present when the page opens on a
        desktop, on any screen: it only ever leaves, over its exit — from when
        its top is a fifth of its height from the top of the screen until it
@@ -427,21 +512,175 @@ body {
        left it half-faded on some screens (QA, 22 Nov). */
     @media (max-width: 1023px) {
       [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolvePhoneFirst; }
-      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealFirstPhone; transition: opacity .16s linear; }
+      [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealFirstPhone; transition: opacity .05s linear; }
       [data-design="chain"] .dev-reborn[data-link="first"][data-away] > :not([aria-hidden]) { opacity: 0; }
     }
     @media (min-width: 1024px) {
       [data-design="chain"] .dev-reborn[data-link="first"] { animation-name: devRevolveOut; animation-range: exit -20% exit 100%; }
       [data-design="chain"] .dev-reborn[data-link="first"] > :not([aria-hidden]) { animation-name: devChainRevealOut; animation-range: exit -20% exit 100%; }
-      [data-design="chain"] .dev-reborn[data-link="first"] .dev-wave { animation: none; }
     }
   }
+}
+
+/* A fine dark edge to a card's letters, and the faintest of its inks a little less faint: over
+   the bright veins of the water a small letter's own edge was lost, and it read as soft
+   (24 Nov). On their column, not on the cards: those are animated, and what is on them is
+   worked out again every frame. (Letters cut out of a gradient take none: there a shadow is
+   painted over them.) */
+[data-design="chain"] .dev-words {
+  text-shadow: 0 0 2px color-mix(in srgb, var(--d-bg) 80%, transparent), 0 1px 4px color-mix(in srgb, var(--d-bg) 55%, transparent);
+  --d-ink4: color-mix(in srgb, var(--d-ink3) 96%, var(--d-bg));
+  --d-ink5: color-mix(in srgb, var(--d-ink3) 86%, var(--d-bg));
+  --d-ink6: color-mix(in srgb, var(--d-ink3) 76%, var(--d-bg));
+  --d-ink7: color-mix(in srgb, var(--d-ink3) 70%, var(--d-bg));
+}
+/* Where nothing is animated by the scroll (no motion wanted; Firefox, an older Safari) a
+   card's words are ordinary text, and ordinary text is painted UNDER its canvas: the time
+   card's were lost in the water. There the canvas goes behind them. */
+@media (prefers-reduced-motion: reduce) {
+  [data-design="chain"] .dev-reborn[data-link] { isolation: isolate; }
+  [data-design="chain"] .dev-reborn[data-link] .dev-glslot { z-index: -1; }
+}
+@supports not (animation-timeline: view()) {
+  [data-design="chain"] .dev-reborn[data-link] { isolation: isolate; }
+  [data-design="chain"] .dev-reborn[data-link] .dev-glslot { z-index: -1; }
 }
 
 /* The page behind the page: dark, so an overscroll or a gap never flashes the
    app's light background under his site. */
 html:has(.dev-root),
 html:has(.dev-root) body { background: #06080b; }
+/* A finger that sets off sideways is the page's own (the water, the skills' orbit); up and
+   down, and two fingers, the browser's as ever. */
+@media (pointer: coarse) {
+  .dev-root { touch-action: pan-y pinch-zoom; }
+}
+/* What the hand passes over comes apart (scatter.ts): a pane with no look of its own, that
+   moves what is behind it, and the canvas over it. Above the page, under what pops up. */
+.dev-scatter {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 70;
+  display: none;
+  pointer-events: none;
+}
+/* A press is a hand put in the water here (flow.ts), not the app's ring on a lake. */
+html:has(.dev-root) .mise-ripple { display: none !important; }
+/* …and the award room's: its page's own ground was the product's pale one, and showed for
+   a moment wherever the doors were painted a little late (QA, 24 Nov). */
+html:has(.award-doors),
+html:has(.award-doors) body { background: #040305; }
+/* The shade under the award room's citation: your light goes through it. */
+.award-shade {
+  background: linear-gradient(to top, rgba(7, 6, 10, .88) 0, rgba(7, 6, 10, .78) 30%, rgba(7, 6, 10, .42) 56%, transparent 82%);
+  -webkit-mask-image: radial-gradient(circle 260px at var(--lx, 50%) var(--ly, -600px), rgba(0, 0, 0, .16) 0, rgba(0, 0, 0, .42) 42%, #000 100%);
+  mask-image: radial-gradient(circle 260px at var(--lx, 50%) var(--ly, -600px), rgba(0, 0, 0, .16) 0, rgba(0, 0, 0, .42) 42%, #000 100%);
+}
+/* The Kural on its palm leaves (Kural.tsx). */
+.olai {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  justify-items: center;
+  align-items: safe center;
+  overflow-y: auto;
+  padding: 34px 16px 30px;
+  background: radial-gradient(90% 80% at 50% 45%, rgba(8, 5, 2, .72), rgba(4, 2, 1, .93));
+  animation: olaiDim .35s ease-out both;
+}
+@keyframes olaiDim { from { opacity: 0; } to { opacity: 1; } }
+.olai-book { width: min(920px, 100%); display: grid; gap: 9px; }
+.olai-leaf {
+  position: relative;
+  padding: 14px clamp(46px, 10%, 96px) 15px;
+  text-align: center;
+  color: #2a160a;
+  text-shadow: 0 1px 0 rgba(255, 238, 198, .5);
+  border-radius: 34px / 46%;
+  background:
+    radial-gradient(120% 140% at 50% 50%, transparent 58%, rgba(70, 38, 10, .42) 100%),
+    linear-gradient(180deg, rgba(255, 240, 204, .5) 0, transparent 8%, transparent 46%, rgba(86, 50, 16, .17) 50%, transparent 54%, transparent 92%, rgba(58, 30, 8, .5) 100%),
+    repeating-linear-gradient(180.4deg, rgba(92, 56, 20, .13) 0 1px, transparent 1px 3.5px),
+    repeating-linear-gradient(179.5deg, rgba(255, 232, 180, .12) 0 1px, transparent 1px 6px),
+    linear-gradient(92deg, #a87c3f 0, #cda367 9%, #dcb87f 34%, #cfa568 62%, #d9b479 84%, #a3763a 100%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .6), inset 0 0 22px rgba(80, 44, 12, .35);
+  animation: olaiLeaf .95s cubic-bezier(.2, .85, .25, 1.02) both;
+  animation-delay: calc(var(--i) * 85ms + 60ms);
+}
+.olai-leaf:nth-child(even) { transform: rotate(.25deg); }
+.olai-leaf:nth-child(odd) { transform: rotate(-.2deg); }
+/* From a stack, one upon another, each to its place. */
+@keyframes olaiLeaf {
+  from { opacity: 0; transform: translateY(calc((var(--n) / 2 - var(--i)) * 84px - 30px)) rotate(calc((var(--i) - 2) * 1.6deg)) scaleX(.94); }
+  35%  { opacity: 1; }
+}
+.olai-hole {
+  position: absolute;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin-top: -6.5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 42%, #0c0602 0 42%, #3b1f0a 60%, rgba(255, 226, 170, .5) 78%, transparent 82%);
+}
+.olai-hole-l { left: clamp(16px, 4.4%, 42px); }
+.olai-hole-r { right: clamp(16px, 4.4%, 42px); }
+.olai-cord {
+  position: absolute;
+  top: calc(50% + 2px);
+  z-index: 1;
+  width: 4px;
+  height: calc(100% + 13px);
+  border-radius: 2px;
+  background: repeating-linear-gradient(-28deg, #8d2419 0 2.5px, #c2492f 2.5px 4px, #6f160f 4px 5.5px);
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, .5);
+  pointer-events: none;
+}
+.olai-cord-l { left: calc(clamp(16px, 4.4%, 42px) + 4.5px); }
+.olai-cord-r { right: calc(clamp(16px, 4.4%, 42px) + 4.5px); }
+.olai-head { font-size: 11px; font-weight: 700; letter-spacing: .3em; text-wrap: balance; color: #6d1f10; }
+.olai-verse { margin-top: 8px; text-wrap: balance; font: 700 clamp(17px, 2.35vw, 25px)/1.5 "Noto Serif Tamil", "Nirmala UI", "Latha", "Tamil Sangam MN", "Tamil MN", serif; color: #2a1206; }
+.olai-said { margin-top: 6px; font: italic 13.5px/1.5 Georgia, "Times New Roman", serif; color: #5a3716; }
+.olai-words { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; }
+.olai-words li { display: grid; gap: 1px; }
+.olai-words span { font: 700 16px/1.4 "Noto Serif Tamil", "Nirmala UI", "Latha", "Tamil Sangam MN", serif; }
+.olai-words em { font: italic 13px/1.3 Georgia, "Times New Roman", serif; color: #5a3716; }
+.olai-text { font: 500 15.5px/1.62 Georgia, "Times New Roman", serif; text-wrap: pretty; }
+.olai-text b { font-weight: 700; color: #6d1f10; }
+.olai-means { font-size: 17px; }
+.olai-shut {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  z-index: 2;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(224, 169, 92, .5);
+  background: rgba(10, 6, 3, .8);
+  color: #f0c98a;
+  font-size: 17px;
+}
+.olai-shut:hover { background: rgba(60, 34, 12, .9); color: #fff; }
+@media (max-width: 640px) {
+  .olai { padding: 74px 10px 30px; }
+  .olai-book { gap: 10px; }
+  .olai-leaf { padding: 15px 40px 16px; border-radius: 26px / 34px; }
+  .olai-head { letter-spacing: .06em; font-size: 10px; }
+  .olai-text { font-size: 14px; line-height: 1.55; }
+  .olai-means { font-size: 15px; }
+  .olai-words { gap: 7px 15px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olai, .olai-leaf { animation: none; }
+}
+/* Behind the site's door nothing scrolls, by wheel, finger or key, until it opens
+   (PageDown did, and the site opened on its fourth card: QA, 24 Nov). */
+html:has([data-boot]:not([data-boot="open"])) { overflow: hidden; }
 
 /* The skills in orbit. One shell per ring rotates; each chip counter-rotates
    at the same period so its label never tumbles. Text that spins is
@@ -527,6 +766,8 @@ html:has(.dev-root) body { background: #06080b; }
   .dev-card:hover::before,
   .dev-card:hover::after { opacity: 1; }
 }
+[data-design="chain"] .dev-card::before,
+[data-design="chain"] .dev-card::after { content: none; }
 
 /* How far down the page you are: a hairline in the chain's colours along the
    top. Tied to the scroll position itself, so it is not motion for its own
@@ -567,6 +808,7 @@ html:has(.dev-root) body { background: #06080b; }
     .dev-parallax { animation: devParallax linear both; animation-timeline: scroll(root block); }
   }
 }
+.dev-root[data-drift] [data-driftwords] { display: none; }
 @keyframes devParallax { to { transform: translate3d(0, var(--depth, -120px), 0); } }
 
 /* The chain reaction. A link on the spine bursts the moment its card
@@ -637,6 +879,42 @@ html:has(.dev-root) body { background: #06080b; }
   85%  { opacity: 1; transform: none; }
   100% { opacity: 0; transform: translateY(8px); }
 }
+/* pandi-dev: the door, which opens by itself (§103.10): opaque to the eye and not quite to
+   the browser (BootSequence), and plainly opaque to one that cannot mix colours. */
+.dev-door { background: var(--d-bg); }
+@supports (background: color-mix(in srgb, red 50%, blue)) {
+  .dev-door { background: color-mix(in srgb, var(--d-bg) 99.7%, transparent); }
+}
+/* Sealed: a light runs the length
+   of the bar, and the word comes together. */
+.dev-boot-bar { position: relative; }
+.dev-boot-bar::after {
+  content: ""; position: absolute; inset: -7px 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--d-a2) 55%, white), color-mix(in srgb, var(--d-a) 45%, transparent) 45%, transparent);
+  background-size: 38% 100%; background-repeat: no-repeat; background-position: 0 0;
+}
+[data-boot="sealed"] .dev-boot-bar::after { animation: devSeal .62s cubic-bezier(.3,.1,.2,1) both; }
+@keyframes devSeal {
+  0%   { opacity: 0; transform: translateX(-12%); }
+  25%  { opacity: .95; }
+  100% { opacity: 0; transform: translateX(74%); }
+}
+.dev-boot-word { letter-spacing: .34em; animation: devSealWord .5s cubic-bezier(.16,1,.3,1) both; }
+@keyframes devSealWord {
+  from { opacity: 0; letter-spacing: .9em; }
+  to   { opacity: 1; letter-spacing: .34em; }
+}
+/* …and the page, from a little farther off. */
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .dev-arrive { transform-origin: 50% 50dvh; animation: devArrive 1.5s cubic-bezier(.16,1,.3,1) backwards; }
+}
+@keyframes devArrive { from { scale: .915; } }
+/* The few quiet words beside the music, until the page is touched. */
+@keyframes devHint {
+  0%, 100% { opacity: 0; }
+  12%, 82% { opacity: 1; }
+}
+
 .dev-vt::view-transition-old(root),
 .dev-vt::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 @media (prefers-reduced-motion: reduce) {
@@ -968,13 +1246,22 @@ canvas[data-gl-lost] {
    it, and a thin rim of liquid colour round the edge — the chip's own hue
    flowing into the theme's (a gradient: §101.9 found the painted texture, a
    51 KB data URL in a custom property, costing ~60 ms a chip per frame). */
+/* The chips are laid out a quarter larger than they are shown (SkillOrbit reads --chip-ss), so
+   the browser always draws them smaller, never stretched. (In plain numbers: they are restyled
+   every frame, and a value that has to be worked out from a variable is worked out again for
+   each of twenty chips — 15 ms a frame on a slow machine, 24 Nov.) */
+.dev-orbit { --chip-ss: 1.25; }
 .dev-orbit-chip {
-  border: 2px solid transparent !important;
+  padding: 3.75px 10px;
+  font-size: 11.25px;
+  border: 2.5px solid transparent !important;
   background:
     linear-gradient(color-mix(in srgb, var(--d-bg) 90%, transparent), color-mix(in srgb, var(--d-bg) 90%, transparent)) padding-box,
     linear-gradient(120deg, color-mix(in srgb, currentColor 80%, transparent), color-mix(in srgb, var(--d-b2) 70%, transparent) 40%, color-mix(in srgb, var(--d-a2) 55%, transparent) 70%, color-mix(in srgb, currentColor 80%, transparent)) border-box !important;
-  text-shadow: 0 0 6px var(--d-bg);
+  text-shadow: 0 0 7.5px var(--d-bg);
 }
+.dev-orbit-chip:hover { box-shadow: 0 0 22px -2px currentColor; }
+@media (min-width: 640px) { .dev-orbit-chip { padding: 5px 12.5px; font-size: 13.75px; } }
 
 /* The portrait's designs (SkillOrbit + PortraitDesign): a new one comes in
    out of a soft blur of light. */
@@ -1051,6 +1338,8 @@ canvas[data-gl-lost] {
 .plate-neon[data-on] .plate-tube-bad > i { animation: plateNeonOn 1.25s calc(var(--i, 4) * 75ms + .2s) backwards, plateNeonBuzz 6.5s 3.2s infinite; }
 @keyframes plateNeonOn { 0% { opacity: 0 } 7% { opacity: .9 } 10% { opacity: .08 } 22% { opacity: .15 } 25% { opacity: 1 } 30% { opacity: .2 } 41% { opacity: .95 } 47% { opacity: .45 } 54%, 100% { opacity: 1 } }
 @keyframes plateNeonBuzz { 0%, 78% { opacity: 1 } 79% { opacity: .25 } 80.5% { opacity: .95 } 82% { opacity: .15 } 83% { opacity: .8 } 84% { opacity: .2 } 88% { opacity: .12 } 89% { opacity: 1 } 100% { opacity: 1 } }
+/* (Wave's hover colour would fill a tube: they swell, they do not fill.) */
+.plate-neon .dev-wave > span.plate-tube:hover { color: transparent; }
 .plate-neon-line { display: block; position: relative; margin-top: 14px; height: 4px; width: min(320px, 70%); border-radius: 9px; background: color-mix(in srgb, var(--d-b2) 22%, #4a515c); }
 .plate-neon-line::after { content: ""; position: absolute; inset: 0; border-radius: 9px; background: color-mix(in srgb, var(--d-b2) 38%, #fff); box-shadow: 0 0 6px var(--d-b2), 0 0 18px var(--d-b2), 0 0 40px color-mix(in srgb, var(--d-b2) 50%, transparent); opacity: 0; }
 .plate-neon[data-on] .plate-neon-line::after { opacity: 1; animation: plateNeonOn 1.1s 1.5s backwards; }
@@ -1110,4 +1399,41 @@ canvas[data-gl-lost] {
   .plate-guides, .plate-dims { opacity: 1; animation: none !important; }
   .plate-twinkle, .plate-ember, .plate-rec, .plate-bars i, .plate-caret { animation: none; }
   .plate-neon[data-on] .plate-tube > i, .plate-neon[data-on] .plate-neon-line::after { animation: none !important; }
+}
+
+/* A still standing in for a living piece (PortraitCore): it breathes. */
+@keyframes devBreathe { 0%, 100% { opacity: .82; scale: .985 } 50% { opacity: 1; scale: 1.015 } }
+
+/* ── The award room's doors (§103.2): bronze and teak, gold light in the crack
+   between them — as much of it as the room that has come. They are shut over the
+   profile while the page changes, and opened by the room when it is ready. */
+.award-doors { --p: 1; position: fixed; inset: 0; z-index: 90; overflow: hidden; perspective: 1500px; perspective-origin: 50% 46%; background: #040305; }
+.award-doors-in { animation: awardDoorsIn .34s ease-out both; }
+@keyframes awardDoorsIn { from { opacity: 0; transform: scale(1.06) } to { opacity: 1; transform: none } }
+.award-door { position: absolute; top: 0; bottom: 0; width: 50.1%; overflow: hidden; backface-visibility: hidden; background: #0d0805; }
+.award-door::before { content: ""; position: absolute; inset: 0; background: url(/dev/award/door.webp) right center / cover no-repeat; }
+.award-door::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(3,2,4,.93), rgba(3,2,4,.72) 45%, rgba(3,2,4,.3) 84%, rgba(3,2,4,.08)), radial-gradient(120% 90% at 100% 50%, transparent 30%, rgba(3,2,4,.75)); }
+.award-door-l { left: 0; transform-origin: 0 50%; }
+.award-door-r { right: 0; transform-origin: 100% 50%; }
+.award-door-r::before, .award-door-r::after { transform: scaleX(-1); }
+.award-crack { position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; margin-left: -1.5px; background: linear-gradient(180deg, rgba(255,214,140,0), #ffe2a6 16%, #fff4d6 50%, #ffe2a6 84%, rgba(255,214,140,0)); box-shadow: 0 0 16px 3px rgba(255,196,100,.7), 0 0 64px 14px rgba(255,150,50,.36); transform: scaleY(calc(.16 + .84 * var(--p))); transition: transform .5s ease-out; animation: awardCrack 2.2s ease-in-out infinite; }
+@keyframes awardCrack { 0%, 100% { opacity: .6 } 50% { opacity: 1 } }
+.award-flood { position: absolute; inset: 0; opacity: 0; background: radial-gradient(56% 78% at 50% 47%, rgba(255,226,166,.92), rgba(255,168,72,.46) 40%, transparent 74%); }
+.award-doors[data-open] { background: transparent; pointer-events: none; animation: awardDoorsGone .01s linear 1.75s forwards; }
+.award-doors[data-open] .award-door-l { animation: awardDoorL 1.55s cubic-bezier(.6,.02,.22,1) forwards; }
+.award-doors[data-open] .award-door-r { animation: awardDoorR 1.55s cubic-bezier(.6,.02,.22,1) forwards; }
+.award-doors[data-open] .award-crack { animation: awardCrackOut .45s ease-out forwards; }
+.award-doors[data-open] .award-flood { animation: awardFlood 1.5s ease-out forwards; }
+@keyframes awardDoorL { 0% { transform: none; opacity: 1 } 70% { opacity: 1 } 100% { transform: rotateY(84deg); opacity: 0 } }
+@keyframes awardDoorR { 0% { transform: none; opacity: 1 } 70% { opacity: 1 } 100% { transform: rotateY(-84deg); opacity: 0 } }
+@keyframes awardCrackOut { to { opacity: 0; transform: scaleY(1) scaleX(9) } }
+@keyframes awardFlood { 0% { opacity: 0 } 24% { opacity: .85 } 100% { opacity: 0 } }
+@keyframes awardDoorsGone { to { visibility: hidden } }
+/* Should nothing ever open them, they open by themselves. */
+.award-doors:not([data-open]):not(.award-doors-in) { animation: awardDoorsSelf .8s ease-out 26s forwards; }
+@keyframes awardDoorsSelf { to { opacity: 0; visibility: hidden } }
+@media (prefers-reduced-motion: reduce) {
+  .award-crack { animation: none; }
+  .award-doors[data-open] { opacity: 0; transition: opacity .4s; }
+  .award-doors[data-open] .award-door, .award-doors[data-open] .award-flood { animation: none; }
 }

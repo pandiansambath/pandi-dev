@@ -17,18 +17,22 @@
 // times in window.__sharp, for QA.
 
 import type { WebGLRenderer } from "three";
+import { whenOpen } from "./stage";
 
 export type SharpKind = "spine" | "ring" | "core" | "award";
 
 // `wide`: what a desktop has always had (he likes it as it is). `ms`: the GPU
 // time a frame of this canvas may take before it must step down.
 const CAP: Record<SharpKind, { phone: number; wide: number; ms: number }> = {
-  spine: { phone: 2.5, wide: 1.25, ms: 7 },
+  spine: { phone: 2.5, wide: 2, ms: 8 },
   ring: { phone: 2.75, wide: 1.75, ms: 8 },
   core: { phone: 2, wide: 1.35, ms: 6 },
-  award: { phone: 2, wide: 1.6, ms: 13 },
+  award: { phone: 2, wide: 1.6, ms: 15 },
 };
 const STEPS = [1, 0.78, 0.6, 0.46];
+// The award room is the one desktop scene heavy enough to need steps (an
+// integrated GPU on battery): smaller ones.
+const WIDE_STEPS = [1, 0.88, 0.78, 0.68];
 const STORE = "pandi-dev-sharp";
 
 function forced(kind: SharpKind): number | null {
@@ -71,7 +75,8 @@ function keepStep(kind: SharpKind, step: number) {
 function ratioAt(kind: SharpKind, phone: boolean, step: number): number {
   const cap = CAP[kind];
   const full = Math.min(window.devicePixelRatio || 1, phone ? cap.phone : cap.wide);
-  // A desktop's canvases were never over-drawn: no steps there.
+  if (kind === "award" && !phone) return Math.max(0.8, full * WIDE_STEPS[step]);
+  // A desktop's other canvases were never over-drawn: no steps there.
   return phone ? Math.max(1, full * STEPS[step]) : full;
 }
 export function pixelRatio(kind: SharpKind, phone: boolean): number {
@@ -82,10 +87,11 @@ export type GpuWatch = { begin: () => void; end: () => void; dispose: () => void
 const IDLE: GpuWatch = { begin: () => {}, end: () => {}, dispose: () => {} };
 
 /** Put begin()/end() round each draw. `apply` is given the new ratio when this
- *  canvas must step down (call it between frames: it is). Phones only. */
+ *  canvas must step down (call it between frames: it is). Phones, and
+ *  the award room anywhere. */
 export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolean, apply: (ratio: number) => void, query = true): GpuWatch {
   const hand = forced(kind);
-  if (!phone && hand == null) return IDLE;
+  if (!phone && kind !== "award" && hand == null) return IDLE;
   const gl = renderer.getContext() as WebGL2RenderingContext;
   const ext = query || hand != null ? (gl.getExtension?.("EXT_disjoint_timer_query_webgl2") as { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number } | null) : null;
   // An iPhone never says, and never needs to.
@@ -100,6 +106,12 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
   let drew = 0;
   let raf = 0;
   let settledAt = performance.now() + 5000;
+  // (Not by what a canvas costs while the door is shut, nor by the opening.)
+  const offOpen = whenOpen(() => {
+    settledAt = Math.max(settledAt, performance.now() + 6000);
+    times = [];
+    gaps = [];
+  });
   let scrolled = 0;
   const onScroll = () => {
     scrolled = performance.now();
@@ -136,9 +148,30 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
     const capped = s[70] - s[10] < 5;
     if (s[40] > 25 && !capped) down();
   };
-  if (!ext && !apple && hand == null) {
+  // With a timer: the page's frames too. A chip that has little to do slows its clock, and
+  // the same drawing then "costs" half as much again: 8 ms with every frame on time is no
+  // reason to give up sharpness (he notices at once).
+  const near: number[] = [];
+  const follow = (now: number) => {
+    if (!renderer.domElement.isConnected) return;
+    raf = requestAnimationFrame(follow);
+    const gap = now - last;
+    last = now;
+    if (gap > 200 || document.hidden) return;
+    near.push(gap);
+    if (near.length > 60) near.shift();
+  };
+  const late = () => {
+    if (near.length < 40) return false;
+    const s = [...near].sort((x, y) => x - y);
+    const lo = s[Math.floor(s.length * 0.12)];
+    const hi = s[Math.floor(s.length * 0.88)];
+    // (Steady at half rate is a battery saver's cap, not a struggle.)
+    return s[s.length >> 1] > 21 && hi - lo > 5;
+  };
+  if (!apple && hand == null) {
     window.addEventListener("scroll", onScroll, { passive: true });
-    raf = requestAnimationFrame(pace);
+    raf = requestAnimationFrame(ext ? follow : pace);
   }
 
   return {
@@ -158,7 +191,7 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
           }
         }
         if (hand == null && times.length >= 24) {
-          if (median(times) > CAP[kind].ms) down();
+          if (median(times) > CAP[kind].ms && late()) down();
           else times = [];
         }
         // One draw in six is timed.
@@ -175,6 +208,7 @@ export function watchGpu(renderer: WebGLRenderer, kind: SharpKind, phone: boolea
       open = null;
     },
     dispose() {
+      offOpen();
       cancelAnimationFrame(raf);
       window.removeEventListener("scroll", onScroll);
       if (waiting) gl.deleteQuery(waiting);

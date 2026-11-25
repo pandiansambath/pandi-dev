@@ -108,6 +108,13 @@ def main() -> None:
         (HERE / "ops" / script.name).parent.mkdir(parents=True, exist_ok=True)
         (HERE / "ops" / script.name).write_text(text, encoding="utf8")
 
+    # How the award room's carvings, its coin and the skeleton were made (offline).
+    art = MONO / "dev" / "art"
+    if art.exists():
+        for f in art.iterdir():
+            if f.is_file():
+                copy(f, HERE / "ops" / "art" / f.name)
+
     # The résumé generator and its final output.
     copy(MONO / "resume" / "build_resume.py", HERE / "resume" / "build_resume.py")
     for f in (MONO / "resume" / "final").iterdir():

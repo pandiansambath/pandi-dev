@@ -40,17 +40,23 @@ import { useDev } from "./context";
 import { PortraitCore } from "./PortraitCore";
 import { framed, PortraitBackdrop, PortraitPhoto } from "./PortraitDesign";
 import { isCoreLook } from "./portraits";
+import { water } from "./flow";
+import { holder } from "./stage";
 import { THEME_EVENT } from "./theme";
 
 type Ring = { r: number; k: number; tilt: number; period: number; dir: 1 | -1 };
 
 // r: radius as a share of the box width · k: how flat the ellipse looks
-// (the viewing angle) · tilt: the ring's own lean, in degrees.
+// (the viewing angle) · tilt: the ring's own lean, in degrees · period: seconds a turn
+// at the pace he left it at (PS → portrait; a sixth slower than it was: "make the
+// movement [a] bit slower… not much, just slightly", 24 Nov).
 const RINGS: Ring[] = [
-  { r: 0.27, k: 0.8, tilt: -9, period: 30, dir: 1 },
-  { r: 0.35, k: 0.64, tilt: 8, period: 46, dir: -1 },
-  { r: 0.43, k: 0.53, tilt: -3, period: 64, dir: 1 },
+  { r: 0.27, k: 0.8, tilt: -9, period: 36, dir: 1 },
+  { r: 0.35, k: 0.64, tilt: 8, period: 55, dir: -1 },
+  { r: 0.43, k: 0.53, tilt: -3, period: 77, dir: 1 },
 ];
+/** The owner's panel, trying a pace. */
+export const PACE_EVENT = "dev-orbit-pace";
 /** Portrait diameter as a share of the box width. Every ring's top (r × k,
  *  at least 0.216) clears its radius (0.18), so nothing hides behind him. */
 const PHOTO = 0.36;
@@ -118,7 +124,7 @@ function planOrbit(list: OrbitSkill[]): Plan {
   return { id: id.toString(36), slots, cursor: pool.length ? cursor % pool.length : 0, pool };
 }
 
-export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: string[]; interval?: number; onOpenAlbum: () => void }) {
+export function SkillOrbit({ photos, interval = 65, pace = 1, onOpenAlbum }: { photos: string[]; interval?: number; pace?: number; onOpenAlbum: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const chips = useRef<(HTMLAnchorElement | null)[]>([]);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -150,6 +156,18 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     return () => ro.disconnect();
   }, []);
 
+  // How fast it goes round: his, and as he tries another.
+  const paced = useRef(pace);
+  useEffect(() => {
+    paced.current = pace;
+    const onPace = (e: Event) => {
+      const v = (e as CustomEvent<number>).detail;
+      paced.current = typeof v === "number" && v >= 0 && v <= 2 ? v : pace;
+    };
+    window.addEventListener(PACE_EVENT, onPace);
+    return () => window.removeEventListener(PACE_EVENT, onPace);
+  }, [pace]);
+
   // The chips' liquid rims are a plain gradient now (globals.css): the painted
   // water was a 51 KB data URL in a custom property, and restyling 20 chips a
   // frame through it cost ~60 ms a chip on a phone (mobile QA, §101.9).
@@ -169,7 +187,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     let vel = 0;
     let visible = true;
 
-    // Each seat's skill, as it is now, and the chips' laid-out sizes.
+    // Each seat's skill, as it is now.
     if (seats.current == null || seats.current.plan !== plan) {
       seats.current = {
         plan,
@@ -182,10 +200,6 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     const seat = seats.current;
     const slots = seat.slots;
     const shown = seat.shown;
-    const dims = slots.map((_, i) => {
-      const n = chips.current[i];
-      return n ? [n.offsetWidth, n.offsetHeight] : [60, 20];
-    });
 
     const relabel = (i: number) => {
       const s = slots[i];
@@ -204,21 +218,34 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       shown.add(next);
       s.label = next;
       const node = chips.current[i];
-      if (!node) return;
-      node.textContent = next;
+      const face = node?.firstElementChild as HTMLElement | null;
+      if (!node || !face) return;
+      face.textContent = next;
       const doc = DOCS[next];
       if (doc) node.setAttribute("href", doc);
       else node.removeAttribute("href");
       node.title = doc ? `${next} — official docs` : next;
       const hue = hueOf(next);
-      node.style.color = hue;
-      node.style.borderColor = `color-mix(in srgb, ${hue} 35%, transparent)`;
-      dims[i] = [node.offsetWidth, node.offsetHeight];
+      face.style.color = hue;
+      face.style.borderColor = `color-mix(in srgb, ${hue} 35%, transparent)`;
     };
 
     const lastO: string[] = [];
     const lastZ: number[] = [];
+    // Where its middle is on the screen (asked for when the pointer moves, and not again for a while).
+    let midX = -1e4;
+    let midY = -1e4;
+    let asked = 0;
+    const onStir = () => {
+      const now = performance.now();
+      if (now - asked < 350 || !visible) return;
+      asked = now;
+      const r = el.getBoundingClientRect();
+      midX = r.left + r.width / 2;
+      midY = r.top + r.height / 2;
+    };
     const place = () => {
+      const wet = !reduced && water.active();
       for (let i = 0; i < slots.length; i++) {
         const c = slots[i];
         const node = chips.current[i];
@@ -240,9 +267,18 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
           } else if (z > -0.5) c.swapped = false;
         }
         const near = (z + 1) / 2;
+        // The hand in the water (flow.ts): it bobs aside as it passes, and back.
+        let ox = 0;
+        let oy = 0;
+        if (wet) {
+          const f = water.at(midX + x, midY + y);
+          const k = 0.03 + near * 0.035;
+          ox = Math.max(-26, Math.min(26, f[0] * k));
+          oy = Math.max(-26, Math.min(26, f[1] * k));
+        }
         const scale = 0.74 + near * 0.36;
         const alpha = 0.5 + near * 0.5;
-        node.style.transform = `translate(-50%, -50%) translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+        node.style.transform = `translate(-50%, -50%) translate3d(${(x + ox).toFixed(1)}px, ${(y + oy).toFixed(1)}px, 0) scale(${(scale / ss).toFixed(3)})`;
         // Only what changed: every style write restyles the chip (§101.9).
         const o = alpha.toFixed(2);
         if (lastO[i] !== o) {
@@ -257,16 +293,21 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       }
     };
 
+    const hold = holder(1, 450);
+    // How much larger than life a chip is laid out (and drawn): a browser draws a moving
+    // layer once, at its own size, and stretches that — so a near chip's letters, 1.1 times
+    // their size, were soft (24 Nov). Now it is always made smaller, never larger.
+    const ss = parseFloat(getComputedStyle(el).getPropertyValue("--chip-ss")) || 1;
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      // Off screen (a phone scrolls past it): nothing to move.
-      if (!visible || document.hidden) {
+      // Off screen (a phone scrolls past it), or behind the door: nothing to move.
+      if (!visible || document.hidden || hold()) {
         raf = requestAnimationFrame(tick);
         return;
       }
       speed += (target - speed) * 0.06;
-      clock += dt * speed;
+      clock += dt * speed * paced.current;
       spin += vel;
       vel *= 0.94;
       place();
@@ -317,6 +358,8 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       el.addEventListener("click", onClick, true);
       el.addEventListener("pointerenter", slow);
       el.addEventListener("pointerleave", fast);
+      window.addEventListener("pointermove", onStir, { passive: true });
+      window.addEventListener("click", onStir, { passive: true });
     }
     return () => {
       cancelAnimationFrame(raf);
@@ -329,6 +372,8 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
       el.removeEventListener("click", onClick, true);
       el.removeEventListener("pointerenter", slow);
       el.removeEventListener("pointerleave", fast);
+      window.removeEventListener("pointermove", onStir);
+      window.removeEventListener("click", onStir);
     };
   }, [size.w, size.h, plan]);
 
@@ -382,7 +427,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
     <div className="w-full [container-type:inline-size]">
     <div
       ref={box}
-      className="relative w-full touch-pan-y select-none [container-type:inline-size]"
+      className="dev-orbit relative w-full touch-pan-y select-none [container-type:inline-size]"
       style={{ height: "calc(50cqw + 44px)", minHeight: 240 }}
     >
       {/* Light behind him, in the theme's colours. */}
@@ -403,6 +448,7 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
         onClick={onOpenAlbum}
         aria-label="Open the photo album"
         title="Open the album"
+        data-portrait
         className="group absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{ width: `${PHOTO * 100}cqw`, height: `${PHOTO * 100}cqw` }}
       >
@@ -457,17 +503,18 @@ export function SkillOrbit({ photos, interval = 65, onOpenAlbum }: { photos: str
             rel="noreferrer noopener"
             title={DOCS[c.label] ? `${c.label} — official docs` : c.label}
             draggable={false}
-            className="dev-orbit-chip absolute left-1/2 top-1/2 block whitespace-nowrap rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-wide transition-[box-shadow,filter] duration-300 will-change-transform hover:brightness-150 hover:shadow-[0_0_18px_-2px_currentColor] sm:px-2.5 sm:py-1 sm:text-[11px]"
-            style={{
-              color: hue,
-              borderColor: `color-mix(in srgb, ${hue} 35%, transparent)`,
-              background: "color-mix(in srgb, var(--d-bg2) 88%, transparent)",
-              // Where this chip's piece of the painted water sits (a phone).
-              ["--wpos" as string]: `${(i * 37) % 100}% ${(i * 61) % 100}%`,
-              opacity: w ? undefined : 0,
-            }}
+            // What moves carries nothing: its look is its child's. Restyled every frame, a
+            // chip with its gradients cost a third of a millisecond each, twenty of them, on
+            // a slow machine (24 Nov).
+            className="absolute left-1/2 top-1/2 block will-change-transform"
+            style={{ opacity: w ? undefined : 0 }}
           >
-            {c.label}
+            <span
+              className="dev-orbit-chip block whitespace-nowrap rounded-full border font-mono tracking-wide transition-[box-shadow,filter] duration-300 hover:brightness-150"
+              style={{ color: hue, borderColor: `color-mix(in srgb, ${hue} 35%, transparent)`, background: "color-mix(in srgb, var(--d-bg2) 88%, transparent)" }}
+            >
+              {c.label}
+            </span>
           </a>
         );
       })}

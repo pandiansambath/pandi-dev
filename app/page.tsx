@@ -16,7 +16,7 @@ import type { Photo } from "@/dev/Album";
 import type { ResumeManifest } from "@/dev/Resume";
 import { cleanMilestones, type Milestone } from "@/dev/profile";
 import type { MusicManifest } from "@/dev/music";
-import { DEFAULT_PORTRAITS, PORTRAIT_FILE, isPortraitLook, type PortraitSet } from "@/dev/portraits";
+import { cleanPace, DEFAULT_PORTRAITS, isPortraitLook, PORTRAIT_FILE, type PortraitSet } from "@/dev/portraits";
 import { cleanCopy } from "@/dev/copy";
 import { DEFAULT_DESIGN, DEFAULT_THEME, THEMES, isDesign, type DesignId } from "@/dev/theme";
 
@@ -126,7 +126,7 @@ export default async function DevPage({
     searchParams,
   ]);
   // His portrait photos and their pace, guarded: only names the server serves.
-  const pr = (rawPortrait ?? {}) as { photos?: unknown; interval?: unknown; look?: unknown };
+  const pr = (rawPortrait ?? {}) as { photos?: unknown; interval?: unknown; look?: unknown; pace?: unknown };
   const portraitFiles = (Array.isArray(pr.photos) ? pr.photos : [])
     .map((x) => String((x as { file?: unknown })?.file ?? ""))
     .filter((f) => PORTRAIT_FILE.test(f));
@@ -137,16 +137,19 @@ export default async function DevPage({
         photos: portraitFiles.map((f) => `/api/dev-site/${f}`),
         interval: typeof pr.interval === "number" ? Math.min(3600, Math.max(3, Math.round(pr.interval))) : DEFAULT_PORTRAITS.interval,
         look,
+        pace: cleanPace(pr.pace),
       }
-    : { ...DEFAULT_PORTRAITS, look };
+    : { ...DEFAULT_PORTRAITS, look, pace: cleanPace(pr.pace) };
   // His playlist, guarded: only names the server would serve.
-  const m = (rawMusic ?? {}) as { tracks?: unknown; volume?: unknown };
+  const m = (rawMusic ?? {}) as { tracks?: unknown; volume?: unknown; start?: unknown };
   const music: MusicManifest = {
     tracks: (Array.isArray(m.tracks) ? m.tracks : []).filter(
       (t): t is MusicManifest["tracks"][number] =>
         !!t && /^[a-z0-9-]{1,48}\.(mp3|m4a|ogg)$/.test(String((t as { file?: unknown }).file)) && ["landing", "album", "both"].includes(String((t as { scope?: unknown }).scope)),
     ),
     volume: typeof m.volume === "number" ? Math.min(1, Math.max(0, m.volume)) : 0.6,
+    // (Checked here, not by music.ts: that is the browser's.)
+    start: m.start === "touch" || m.start === "button" ? m.start : "auto",
   };
   const milestones: Milestone[] | null = cleanMilestones(rawMilestones);
   const s = (rawSite ?? {}) as { theme?: unknown; design?: unknown };

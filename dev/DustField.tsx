@@ -24,11 +24,13 @@
 //   takes its place — never out.
 //
 //   THE DUST — fine motes in the theme's colours drifting towards you, faster
-//   while you scroll (a zoom in, whichever way you scroll). Where the pointer
-//   moves, or a finger taps, rings run out like a stone dropped in water: the
-//   dust is pushed aside and the watercolour itself bends and catches light
-//   along each ring, and they die away. (The dust alone was too sparse for
-//   the rings to read — 94.12.)
+//   while you scroll (a zoom in, whichever way you scroll).
+//
+//   THE HAND IN IT (§104.7, flow.ts) — where the pointer goes the water is
+//   dragged along, eddies behind it and waves run out of it; the watercolour,
+//   the blooms and the grid are carried with it, the dust too; its wake is
+//   dark, and comes apart into beads that flow and come together again.
+//   (Rings like a stone's, dropped wherever the pointer passed, before.)
 //
 // It sits over the page's vignette and under the content (the vignette used
 // to sit on top of it, which is why he could not see the dust at all). The
@@ -43,9 +45,13 @@
 // it cannot draw with a layer's background colour, and the orbit's chips came
 // back as black boxes after a scroll. Same looks, same motion, one canvas.
 
+import { pageY } from "./scrollPos";
 import { useEffect, useRef } from "react";
 import { readRGB, THEME_EVENT } from "./theme";
-import { guardCanvas } from "./glGuard";
+import { beadPoints, beadShader, COME_APART, flowTexture, SURFACE_LIGHT, water as hand } from "./flow";
+import { scatterUnderHand } from "./scatter";
+import { guardCanvas, quiet } from "./glGuard";
+import { holder, whenOpen } from "./stage";
 
 const RIPPLES = 6;
 
@@ -57,8 +63,12 @@ const FULLSCREEN_VERT = /* glsl */ `
   }`;
 
 const WATER_FRAG = /* glsl */ `
+#define sq2(x) ((x) * (x))
+
   precision highp float;
-  uniform float uTime, uZoom, uAspect, uNow;
+  uniform float uTime, uZoom, uAspect, uNow, uStirOn;
+  uniform vec2 uRes;
+  uniform sampler2D uFlow, uSlope;
   uniform vec3 uA, uB, uC, uD;
   uniform vec4 uRipple[${RIPPLES}];
   varying vec2 vUv;
@@ -101,9 +111,15 @@ const WATER_FRAG = /* glsl */ `
   }
   void main() {
     vec2 c = (vUv - 0.5) * vec2(uAspect, 1.0);
-    // A stone in the water: where the pointer passed, rings run out through
-    // the watercolour itself, bending it as they go, and fade (the same
-    // ripples that push the dust aside).
+    // The hand in the water: it is carried along, and bent by its own surface.
+    if (uStirOn > 0.5) {
+      vec2 at = vec2(vUv.x, 1.0 - vUv.y);
+      vec4 fl = texture2D(uFlow, at);
+      vec2 g = texture2D(uSlope, at).xy * 0.74;
+      c -= vec2(fl.x, -fl.y) / uRes.y * 0.085;
+      c += vec2(g.x, -g.y) * 0.05;
+    }
+    // The opening's burst going through it: rings, bending it as they go.
     vec2 bend = vec2(0.0);
     float crest = 0.0;
     for (int i = 0; i < ${RIPPLES}; i++) {
@@ -112,7 +128,7 @@ const WATER_FRAG = /* glsl */ `
       if (age < 0.0 || age > 2.6) continue;
       vec2 dv = c - r.xy * 0.5 * vec2(uAspect, 1.0);
       float d = length(dv);
-      float band = exp(-pow((d - age * 0.4) * 8.0, 2.0));
+      float band = exp(-sq2((d - age * 0.4) * 8.0));
       float fade = exp(-age * 1.4) * r.w;
       bend += normalize(dv + 1e-5) * band * fade * 0.09;
       crest += band * fade;
@@ -147,6 +163,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       const renderer = new THREE.WebGLRenderer({ canvas: el, alpha: true, antialias: false, powerPreference: "low-power", premultipliedAlpha: true });
+
+      quiet(renderer);
       // Taken away by the browser (a phone's few contexts): hide, never white.
       const unguard = guardCanvas(el);
       // A phone: 1× (a soft background, the whole screen — §101.9).
@@ -157,6 +175,17 @@ export function DustField({ decor = false }: { decor?: boolean }) {
       const quad = new THREE.PlaneGeometry(2, 2);
 
       const ripples = Array.from({ length: RIPPLES }, () => new THREE.Vector4(0, 0, -99, 0));
+      // The hand in the water.
+      const flow = flowTexture(THREE);
+      const offUse = still ? () => {} : hand.use();
+      // (Where the browser can, the whole page comes apart under it; else this canvas and the
+      // cards do, each by itself.)
+      const offScatter = still ? () => {} : scatterUnderHand((el.closest(".dev-root") as HTMLElement | null) ?? document.documentElement);
+      const offHand = () => {
+        offScatter();
+        offUse();
+      };
+      const stir = { uFlow: { value: flow.tex }, uSlope: { value: flow.slope }, uStirOn: { value: 0 }, uApart: { value: 1 } };
       // The finale's surface (23 Nov): where the spine's chain dips into it,
       // rings spread across the water in perspective.
       const SURF = 4;
@@ -189,6 +218,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uAspect: { value: 1 },
           uNow: { value: 0 },
           uRipple: { value: ripples },
+          ...stir,
+          uRes: { value: new THREE.Vector2(1, 1) },
           uA: { value: new THREE.Color(0.85, 0.47, 0.26) },
           uB: { value: new THREE.Color(0.18, 0.83, 0.75) },
           uC: { value: new THREE.Color(0.6, 0.55, 1) },
@@ -228,9 +259,12 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uSurfAt: { value: new THREE.Vector3(0, 0, 0) },
           uShock: { value: new THREE.Vector3(0, 0, -99) },
           uPull: { value: 0 },
+          ...stir,
         },
         vertexShader: FULLSCREEN_VERT,
         fragmentShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           uniform sampler2D tMap;
           uniform float uGain, uNow, uAspect, uRingGain, uDecor, uScroll, uClock;
           uniform vec2 uRes;
@@ -239,9 +273,13 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uniform vec4 uSurf[4];
           uniform vec3 uSurfAt;
           uniform vec3 uShock;
-          uniform float uPull;
+          uniform float uPull, uStirOn, uApart;
+          uniform sampler2D uFlow, uSlope;
           varying vec2 vUv;
+          ${SURFACE_LIGHT}
           const float TAU = 6.2831853;
+          vec4 flowAt(vec2 p) { return textureLod(uFlow, p / uRes, 0.0); }
+          ${COME_APART}
           // Premultiplied "over".
           vec4 over(vec4 top, vec4 bottom) { return top + bottom * (1.0 - top.a); }
           vec4 tint(vec3 col, float a) { return vec4(col * a, a); }
@@ -309,9 +347,30 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             // A little stronger towards the edges, where nothing is written.
             float edge = 0.6 + 0.4 * smoothstep(0.15, 0.75, length(c * vec2(1.0, 1.25)));
             vec4 water = texture2D(tMap, vUv) * uGain * edge;
-            // The stone in the water: the rings' light, drawn here at full
-            // resolution and its own strength — inside the water it was cut
-            // to the water's quiet 12% and could not be seen (QA, 22 Nov).
+            // What the hand does here (drawn at full resolution and its own strength: inside
+            // the water, laid at a quiet 12%, it could not be seen).
+            vec2 hp = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
+            vec4 fl = vec4(0.0);
+            vec3 sheen = vec3(0.0);
+            vec4 wake = vec4(0.0);
+            if (uStirOn > 0.5) {
+              fl = flowAt(hp);
+              sheen = surfaceLight(textureLod(uSlope, hp / uRes, 0.0).xy);
+              water = mix(water, water * 2.6, smoothstep(0.05, 0.6, fl.z));
+              float gone = smoothstep(0.1, 0.42, fl.z) * uApart;
+              if (gone > 0.003) {
+                vec2 from;
+                vec3 bd = beadAt(hp, 15.0, from);
+                float pick = apartRnd(from + 3.0);
+                vec4 src = textureLod(tMap, vec2(from.x / uRes.x, 1.0 - from.y / uRes.y), 0.0);
+                vec3 tone = mix(uRing, pick < 0.4 ? uCa : pick < 0.7 ? uCc : uRing, 0.75) * (0.22 + 0.5 * apartRnd(from.yx)) + src.rgb * 0.55;
+                // The hole its wake is, and the beads in it.
+                float hole = gone * 0.8;
+                wake = vec4(uBg * hole, hole);
+                float ba = bd.x * gone * 0.7 * smoothstep(0.16, 0.5, bd.z);
+                wake = over(vec4(tone * bd.y * ba, ba), wake);
+              }
+            }
             vec2 cc = c * vec2(uAspect, 1.0);
             float ring = 0.0;
             for (int i = 0; i < ${RIPPLES}; i++) {
@@ -320,14 +379,23 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               if (age < 0.0 || age > 2.6) continue;
               float d = length(cc - r.xy * 0.5 * vec2(uAspect, 1.0));
               // a crisp ring with a fainter one just inside it, like water
-              float band = exp(-pow((d - age * 0.4) * 46.0, 2.0)) + 0.4 * exp(-pow((d - age * 0.4 + 0.03) * 56.0, 2.0));
+              float band = exp(-sq2((d - age * 0.4) * 46.0)) + 0.4 * exp(-sq2((d - age * 0.4 + 0.03) * 56.0));
               ring += band * exp(-age * 1.5) * r.w;
             }
             float a = clamp(ring, 0.0, 1.0) * uRingGain;
             vec4 lit = water * (1.0 - a) + vec4(uRing * a, a);
             if (uDecor > 0.5) {
-              vec2 P = vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y);
+              // (The room is seen through the water: carried with it, a little.)
+              vec2 P = hp - fl.xy * 0.055;
               lit = over(lit, room(P));
+              P = hp;
+              // Its surface: the lit side of a wave and its shadow, and a glint off it.
+              lit = over(vec4(uBg * sheen.y * 0.5, sheen.y * 0.5), lit);
+              float la = sheen.x * uRingGain * 0.55;
+              lit = over(vec4(uRing * la, la), lit);
+              float ga = clamp(sheen.z * 1.2, 0.0, 1.0) * uRingGain;
+              lit = over(vec4(mix(uRing, vec3(1.0), 0.6) * ga, ga), lit);
+              lit = over(wake, lit);
               // Rings across the finale's surface, flattened by perspective,
               // from where the chain dips in; and the light at that point.
               float rip = 0.0;
@@ -337,7 +405,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
                 if (age < 0.0 || age > 3.2) continue;
                 float dd = length((P - s.xy) * vec2(1.0, 6.2));
                 float R = 10.0 + age * 220.0;
-                float band = exp(-pow((dd - R) / 5.5, 2.0)) + 0.45 * exp(-pow((dd - R + 15.0) / 6.5, 2.0));
+                float band = exp(-sq2((dd - R) / 5.5)) + 0.45 * exp(-sq2((dd - R + 15.0) / 6.5));
                 rip += band * exp(-age * 1.05) * s.w;
               }
               float glowS = exp(-length((P - uSurfAt.xy) * vec2(1.0, 3.2)) / 52.0) * 0.32 * uSurfAt.z;
@@ -348,10 +416,10 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               if (sAge > 0.0 && sAge < 2.2) {
                 float sd = length((P - uSurfAt.xy) * vec2(1.0, 7.0));
                 float SR = 20.0 + sAge * 760.0;
-                shock = (exp(-pow((sd - SR) / 22.0, 2.0)) * 1.5 + 0.7 * exp(-pow((sd - SR + 48.0) / 28.0, 2.0))) * exp(-sAge * 1.2);
+                shock = (exp(-sq2((sd - SR) / 22.0)) * 1.5 + 0.7 * exp(-sq2((sd - SR + 48.0) / 28.0))) * exp(-sAge * 1.2);
                 // The surface line flashes along its length as it arrives.
-                shock += exp(-pow((P.y - uSurfAt.y) / 3.0, 2.0)) * exp(-sAge * 2.6) * 1.2;
-                float col = exp(-pow((P.x - uSurfAt.x) / (6.0 + sAge * 10.0), 2.0)) * step(P.y, uSurfAt.y + 4.0);
+                shock += exp(-sq2((P.y - uSurfAt.y) / 3.0)) * exp(-sAge * 2.6) * 1.2;
+                float col = exp(-sq2((P.x - uSurfAt.x) / (6.0 + sAge * 10.0))) * step(P.y, uSurfAt.y + 4.0);
                 float climb = smoothstep(uSurfAt.y - sAge * 900.0 - 40.0, uSurfAt.y - sAge * 900.0, P.y);
                 shock += col * climb * exp(-sAge * 2.0) * 1.6;
               }
@@ -370,6 +438,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               vec3 ringC = mix(mix(uRing, vec3(1.0), 0.3), uRing * 0.85, paleBg);
               lit = over(vec4(ringC * ra, ra), lit);
             }
+            if (uDecor <= 0.5) lit = over(wake, lit);
             gl_FragColor = lit;
           }`,
       });
@@ -453,7 +522,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               q = bez(P0, P1, P2, P3, u);
               vec2 tg = normalize(bezD(P0, P1, P2, P3, u) + 1e-4);
               // Across the ribbon: wide out in the air, a thread at the chain.
-              q += vec2(-tg.y, tg.x) * (seed.z - 0.5) * 38.0 * pow(1.0 - u, 1.4);
+              q += vec2(-tg.y, tg.x) * (seed.z - 0.5) * 38.0 * pow(max(0.0, 1.0 - u), 1.4);
               q += tg * sin(t * 9.0 + seed.w * 6.2831) * 6.0 * (1.0 - u);
             } else {
               // Spray: thrown back up the chain from the water, fanning, falling.
@@ -519,14 +588,19 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           uAspect: { value: 1 },
           uMouse: { value: new THREE.Vector2(9, 9) },
           uRipple: { value: ripples },
+          ...stir,
+          uHigh: { value: 800 },
           uA: { value: new THREE.Color(1, 0.6, 0.35) },
           uB: { value: new THREE.Color(1, 0.85, 0.5) },
           uC: { value: new THREE.Color(0.5, 0.95, 0.9) },
           uGain: { value: 1 },
         },
         vertexShader: /* glsl */ `
+#define sq2(x) ((x) * (x))
+
           attribute vec4 seed;
-          uniform float uZ, uTime, uNow, uRatio, uAspect;
+          uniform float uZ, uTime, uNow, uRatio, uAspect, uStirOn, uHigh;
+          uniform sampler2D uFlow;
           uniform vec2 uMouse;
           uniform vec4 uRipple[${RIPPLES}];
           varying float vAlpha;
@@ -540,7 +614,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
             vec4 clip = projectionMatrix * mv;
             vec2 ndc = clip.xy / clip.w;
-            // Water: rings widening from where the pointer passed.
+            // Water: carried with it, and lit where it is stirred…
             vec2 push = vec2(0.0);
             float glow = 0.0;
             for (int i = 0; i < ${RIPPLES}; i++) {
@@ -549,10 +623,15 @@ export function DustField({ decor = false }: { decor?: boolean }) {
               if (age < 0.0 || age > 2.6) continue;
               vec2 dv = (ndc - r.xy) * vec2(uAspect, 1.0);
               float d = length(dv);
-              float band = exp(-pow((d - age * 0.8) * 7.0, 2.0));
+              float band = exp(-sq2((d - age * 0.8) * 7.0));
               float fade = exp(-age * 1.5) * r.w;
               push += normalize(dv + 1e-5) * band * fade * 0.16;
               glow += band * fade;
+            }
+            if (uStirOn > 0.5) {
+              vec4 fl = texture2D(uFlow, vec2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5));
+              push += vec2(fl.x, -fl.y) / uHigh * (0.16 + 0.5 * seed.y);
+              glow += fl.z * 0.8;
             }
             // …and a gentle parting right round the pointer itself.
             vec2 dm = (ndc - uMouse) * vec2(uAspect, 1.0);
@@ -580,6 +659,20 @@ export function DustField({ decor = false }: { decor?: boolean }) {
           }`,
       });
       scene.add(new THREE.Points(geo, mat));
+
+      // ── The beads the hand throws clear ──
+      const bs = beadShader(`uniform vec2 uRes; vec4 put(vec2 p) { return vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0); }`);
+      const beadMat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        uniforms: { uRes: { value: new THREE.Vector2(1, 1) }, uPx: { value: renderer.getPixelRatio() }, uShow: { value: 0.85 } },
+        vertexShader: bs.vertex,
+        fragmentShader: bs.fragment,
+      });
+      const beads = beadPoints(THREE, beadMat);
+      const beadScene = new THREE.Scene();
+      beadScene.add(beads.points);
 
       const paint = () => {
         const root = el.closest(".dev-root") ?? document.documentElement;
@@ -611,13 +704,26 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         inflowMat.uniforms.uC1.value = c("a2", [240, 160, 100]);
         inflowMat.uniforms.uHot.value = c("gold", [240, 189, 106]);
         inflowMat.uniforms.uGain.value = light ? 0.8 : 1;
+        hand.palette = (["b2", "gold", "c", "ink"] as const).map((k, i) => readRGB(root, k, ([[125, 240, 220], [240, 189, 106], [155, 140, 255], [230, 237, 245]] as [number, number, number][])[i]).map((v) => v / 255));
       };
       paint();
       window.addEventListener(THEME_EVENT, paint);
 
+      let fitted = "";
+      let tall = window.innerHeight;
+      let wide = window.innerWidth;
       const fit = () => {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
+        // A phone: the screen without its address bar, always (100lvh). The bar slides away
+        // and back in the middle of a scroll, and each time the drawing surface was made
+        // anew — which stops the page until the graphics have answered.
+        // (And its own width: the window's has the scrollbar in it, and everything drawn was a
+        // hundredth narrower than the page.)
+        const w = Math.max(1, el.clientWidth || window.innerWidth);
+        const h = phone ? Math.max(1, el.clientHeight) : window.innerHeight;
+        if (`${w}x${h}` === fitted) return;
+        wide = w;
+        fitted = `${w}x${h}`;
+        tall = h;
         renderer.setSize(w, h, false);
         const pr = renderer.getPixelRatio();
         target.setSize(Math.max(2, Math.round(w * pr * waterScale)), Math.max(2, Math.round(h * pr * waterScale)));
@@ -631,70 +737,76 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         waterMat.uniforms.uAspect.value = w / h;
         blitMat.uniforms.uAspect.value = w / h;
         blitMat.uniforms.uRes.value.set(w, h);
+        waterMat.uniforms.uRes.value.set(w, h);
+        beadMat.uniforms.uRes.value.set(w, h);
+        mat.uniforms.uHigh.value = h;
       };
       fit();
       window.addEventListener("resize", fit);
 
       // Scroll speed → zoom speed (always forward).
-      let lastY = window.scrollY;
+      let lastY = pageY();
       let lastT = performance.now();
       let scrollV = 0;
       let busyUntil = 0;
       const onScroll = () => {
         const now = performance.now();
-        const dy = Math.abs(window.scrollY - lastY);
+        const y = pageY();
+        const dy = Math.abs(y - lastY);
         const dt = Math.max(8, now - lastT);
         scrollV = Math.min(30, (dy / dt) * 16);
-        lastY = window.scrollY;
+        lastY = y;
         lastT = now;
         busyUntil = now + 900;
       };
       window.addEventListener("scroll", onScroll, { passive: true });
 
-      // The pointer stirs the water; a tap drops a stone.
+      // (Rings: the opening's burst only.)
       let next = 0;
-      let lastDrop = 0;
-      let lx = 9;
-      let ly = 9;
       const drop = (x: number, y: number, strength: number) => {
         ripples[next].set(x, y, performance.now() / 1000, strength);
         next = (next + 1) % RIPPLES;
         busyUntil = performance.now() + 2600;
         rippleUntil = busyUntil;
       };
-      const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / window.innerWidth) * 2 - 1, -((e.clientY / window.innerHeight) * 2 - 1)];
+      const toNdc = (e: PointerEvent): [number, number] => [(e.clientX / wide) * 2 - 1, -((e.clientY / tall) * 2 - 1)];
       const onMove = (e: PointerEvent) => {
         if (still) return;
         const [x, y] = toNdc(e);
         if (e.pointerType === "mouse") mat.uniforms.uMouse.value.set(x, y);
-        const now = performance.now();
-        const moved = Math.hypot(x - lx, y - ly);
-        if (moved > 0.08 && now - lastDrop > 170) {
-          drop(x, y, Math.min(1, 0.5 + moved * 3));
-          lx = x;
-          ly = y;
-          lastDrop = now;
-        }
-        busyUntil = Math.max(busyUntil, now + 600);
-      };
-      const onDown = (e: PointerEvent) => {
-        if (still) return;
-        const [x, y] = toNdc(e);
-        drop(x, y, 1);
+        busyUntil = Math.max(busyUntil, performance.now() + 600);
       };
       const onLeave = () => mat.uniforms.uMouse.value.set(9, 9);
       window.addEventListener("pointermove", onMove, { passive: true });
-      window.addEventListener("pointerdown", onDown, { passive: true });
       document.documentElement.addEventListener("pointerleave", onLeave);
 
       let raf = 0;
       let prev = performance.now();
       let speed = 0;
       let skip = false;
+      // The door opens (§103.10): the burst goes through the water too — rings run out
+      // from the middle of it — and the dust rushes past you and settles.
+      const hold = holder(6);
+      let primed = false;
+      let rush = 0;
+      const offOpen = whenOpen((bang) => {
+        if (!bang || still) return;
+        rush = 1;
+        busyUntil = performance.now() + 3400;
+        drop(0, 0, 1);
+        window.setTimeout(() => drop(0, 0, 0.8), 260);
+        window.setTimeout(() => drop(0, 0, 0.6), 620);
+      });
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         if (document.hidden) return;
-        const busy = now < busyUntil;
+        if (hold()) {
+          prev = now;
+          return;
+        }
+        const stirred = hand.active();
+        // (Where the whole page comes apart by itself, its water need not be drawn every frame.)
+        const busy = now < busyUntil || (stirred && hand.apart);
         // Nothing happening: half the frames are enough for a slow drift.
         if (!busy) {
           skip = !skip;
@@ -703,7 +815,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         const dt = Math.min(0.06, (now - prev) / 1000);
         prev = now;
         if (!still) {
-          const goal = 0.22 + scrollV * 0.55;
+          rush *= Math.exp(-dt * 1.5);
+          const goal = 0.22 + scrollV * 0.55 + rush * 17;
           speed += (goal - speed) * (1 - Math.exp(-dt * (goal > speed ? 6 : 2.2)));
           scrollV *= Math.exp(-dt * 5);
           mat.uniforms.uZ.value += speed * dt;
@@ -715,7 +828,8 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         mat.uniforms.uNow.value = now / 1000;
         waterMat.uniforms.uNow.value = now / 1000;
         blitMat.uniforms.uNow.value = now / 1000;
-        blitMat.uniforms.uScroll.value = window.scrollY;
+        const sy = pageY();
+        blitMat.uniforms.uScroll.value = sy;
         if (decor) {
           // Where the finale's surface is, and where the chain meets it.
           if (now - lookedAt > 1000) {
@@ -728,7 +842,7 @@ export function DustField({ decor = false }: { decor?: boolean }) {
             lookedAt = now;
           }
           const at = blitMat.uniforms.uSurfAt.value as InstanceType<typeof THREE.Vector3>;
-          const sr = surfDoc.width > 0 ? { top: surfDoc.top - window.scrollY, left: surfDoc.left, width: surfDoc.width } : null;
+          const sr = surfDoc.width > 0 ? { top: surfDoc.top - sy, left: surfDoc.left, width: surfDoc.width } : null;
           if (sr && sr.top > -80 && sr.top < window.innerHeight + 40) {
             const x = spineMidX >= 0 ? spineMidX : sr.left + sr.width / 2;
             at.set(x, sr.top, 1);
@@ -774,7 +888,13 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         // The water moves slowly: every other frame is enough to repaint it
         // (it is laid over the page every frame regardless).
         waterTick = !waterTick;
-        if (waterTick || !waterReady || now < rippleUntil) {
+        stir.uStirOn.value = stirred ? 1 : 0;
+        stir.uApart.value = hand.apart ? 1 : 0;
+        if (stirred) {
+          flow.update();
+          beads.update();
+        } else beads.points.visible = false;
+        if (waterTick || !waterReady || now < rippleUntil || stirred) {
           renderer.setRenderTarget(target);
           renderer.clear();
           renderer.render(waterScene, flat);
@@ -784,12 +904,21 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         renderer.clear();
         renderer.render(blitScene, flat);
         renderer.render(scene, camera);
-        if (NI > 0 && (inflowMat.uniforms.uOn.value as number) > 0.01) renderer.render(inflowScene, flat);
+        if (beads.points.visible || !primed) renderer.render(beadScene, flat);
+        // (The finale's streams drawn once, unseen, behind the door: the first time a shader
+        // is used the page stops for the graphics, and that was as the finale arrived.)
+        if (NI > 0 && (!primed || (inflowMat.uniforms.uOn.value as number) > 0.01)) renderer.render(inflowScene, flat);
+        primed = true;
       };
       raf = requestAnimationFrame(loop);
 
       cleanup = () => {
         unguard();
+        offOpen();
+        offHand();
+        flow.dispose();
+        beads.dispose();
+        beadMat.dispose();
         iGeo.dispose();
         inflowMat.dispose();
         cancelAnimationFrame(raf);
@@ -797,7 +926,6 @@ export function DustField({ decor = false }: { decor?: boolean }) {
         window.removeEventListener("resize", fit);
         window.removeEventListener("scroll", onScroll);
         window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerdown", onDown);
         document.documentElement.removeEventListener("pointerleave", onLeave);
         geo.dispose();
         mat.dispose();
@@ -820,5 +948,5 @@ export function DustField({ decor = false }: { decor?: boolean }) {
 
   // z-[1]: over the page's vignette and colour washes (they used to sit on
   // top of it and swallowed the dust), under the content (main is z-10).
-  return <canvas ref={canvas} aria-hidden className="pointer-events-none fixed inset-0 z-[1] h-full w-full" />;
+  return <canvas ref={canvas} aria-hidden className="pointer-events-none fixed inset-0 z-[1] h-[100lvh] w-full md:h-full" />;
 }

@@ -10,10 +10,9 @@
 // market listings, and classifieds for the résumé and the ways to reach him.
 // In a dark theme it prints as the Night Edition.
 
-import { CAREER_START, EMAIL, LINKS, chennaiTime, elapsed, useDev, useNow, usePortraits } from "./context";
+import { chennaiTime, elapsed, useDev, useNow, usePortraits, useData } from "./context";
 import { ResumeActions } from "./designKit";
-import { honours, PROJECT, VOLUNTEERING } from "./profile";
-import { CLUSTERS, EDUCATION } from "./skills";
+import { honours } from "./profile";
 import { findTheme } from "./theme";
 
 const RULE = "border-[var(--d-ink)]";
@@ -25,6 +24,7 @@ function longDate(now: Date) {
 }
 
 export function ChronicleDesign() {
+  const { CAREER_START, CLUSTERS, EDUCATION, EMAIL, LINKS, PROJECT, VOLUNTEERING } = useData();
   // His portrait photos and their pace, set in the owner panel (22 Nov).
   const PORTRAITS = usePortraits();
   const { entered, milestones, themeId, openAlbum, photos } = useDev();
@@ -32,7 +32,7 @@ export function ChronicleDesign() {
   const exp = now ? elapsed(CAREER_START, now) : null;
   const list = honours(milestones);
   const night = !findTheme(themeId).light;
-  const press = (d: number) => (entered ? { animation: `devPress .9s ${d}s cubic-bezier(.2,.8,.2,1) both` } : { opacity: 0 });
+  const press = (d: number) => (entered ? { animation: `devPress .9s ${d}s cubic-bezier(.2,.8,.2,1) both` } : undefined);
   const ticker = CLUSTERS.flatMap((c) => c.items.map((i) => ({ i, hue: c.hue })));
 
   return (

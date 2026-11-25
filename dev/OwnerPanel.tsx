@@ -17,11 +17,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { Photo } from "./Album";
 import { useDev } from "./context";
-import type { MusicManifest, Track } from "./music";
+import type { MusicManifest, MusicStart, Track } from "./music";
 import { Popup, type Origin } from "./Popup";
 import type { ResumeManifest } from "./Resume";
 import type { PortraitSet } from "./portraits";
-import { PORTRAIT_LOOKS, isPortraitLook, type PortraitLook } from "./portraits";
+import { cleanPace, isPortraitLook, PORTRAIT_LOOKS, type PortraitLook } from "./portraits";
+import { PACE_EVENT } from "./SkillOrbit";
 import { CorePreview } from "./PortraitCore";
 import { DesignPreview } from "./PortraitDesign";
 import { DESIGNS, findTheme } from "./theme";
@@ -36,17 +37,25 @@ const toFile = (url: string): PortraitFile => {
   const file = url.replace(/^\/api\/dev-site\//, "");
   return { id: file.replace(/^portrait\//, "").replace(/\.webp$/, ""), file };
 };
-type PortraitJSON = { photos: PortraitFile[]; interval: number; look?: string };
+type PortraitJSON = { photos: PortraitFile[]; interval: number; look?: string; pace?: number };
 const toSet = (m: PortraitJSON): PortraitSet => ({
   photos: m.photos.map((p) => `/api/dev-site/${p.file}`),
   interval: m.interval,
   look: isPortraitLook(m.look) ? m.look : "natural",
+  pace: cleanPace(m.pace),
 });
 
 const SCOPES: { id: Track["scope"]; label: string }[] = [
   { id: "both", label: "Everywhere" },
   { id: "landing", label: "On the site" },
   { id: "album", label: "In the album" },
+];
+
+/** How the music begins (PS → sound). */
+const STARTS: { id: MusicStart; label: string; says: string }[] = [
+  { id: "auto", label: "By itself", says: "As the site opens, where the visitor's browser allows it. Most browsers want a touch first: then at their first touch anywhere." },
+  { id: "touch", label: "At the first touch", says: "Silent until the visitor touches, clicks or presses a key anywhere on the page." },
+  { id: "button", label: "Only by the button", says: "Silent until the visitor presses the music button in the menu. The award room waits for it too." },
 ];
 
 const BTN =
@@ -81,6 +90,8 @@ export function OwnerPanel({
 }) {
   const { ownerFetch, toast, setPortraitLook, portraitLook, themeId, designId, siteDefault, saveDefault, copy, setCopy } = useDev();
   const [tab, setTab] = useState<"photos" | "portrait" | "template" | "music" | "sound" | "résumé" | "site">("photos");
+  // The Template, beside the page (the cards are on its right, so it opens on the left).
+  const [side, setSide] = useState<"left" | "right">("left");
   // The Template: his words, live on the page behind as he types; `savedCopy`
   // is what visitors see until he saves.
   const [savedCopy, setSavedCopy] = useState<Copy>(copy);
@@ -93,7 +104,7 @@ export function OwnerPanel({
   useEffect(() => () => setCopy(savedRef.current), [setCopy]);
   const setWord = (key: string, v: string) => {
     const texts = { ...copy.texts };
-    if (v === "" || v === COPY_DEFAULTS[key]) delete texts[key];
+    if (v === COPY_DEFAULTS[key]) delete texts[key];
     else texts[key] = v;
     setCopy({ ...copy, texts });
   };
@@ -113,8 +124,15 @@ export function OwnerPanel({
   const [pDraft, setPDraft] = useState<string[]>(portraits.photos);
   const [pSeconds, setPSeconds] = useState<number>(portraits.interval);
   const [pLook, setPLook] = useState<PortraitLook>(portraits.look);
+  const [pPace, setPPace] = useState<number>(portraits.pace);
+  // (Tried on the page behind as he moves it; the site's own again when he leaves.)
+  const tryPace = (v: number) => {
+    setPPace(v);
+    window.dispatchEvent(new CustomEvent(PACE_EVENT, { detail: v }));
+  };
+  useEffect(() => () => void window.dispatchEvent(new CustomEvent(PACE_EVENT, { detail: -1 })), []);
   const portraitInput = useRef<HTMLInputElement>(null);
-  const pDirty = JSON.stringify(pDraft) !== JSON.stringify(portraits.photos) || pSeconds !== portraits.interval || pLook !== portraits.look;
+  const pDirty = JSON.stringify(pDraft) !== JSON.stringify(portraits.photos) || pSeconds !== portraits.interval || pLook !== portraits.look || pPace !== portraits.pace;
   const [cv, setCv] = useState<{ pdf: File | null; docx: File | null }>({ pdf: null, docx: null });
   // Bumped after an upload so the two file pickers start empty again.
   const [cvKey, setCvKey] = useState(0);
@@ -128,7 +146,8 @@ export function OwnerPanel({
   const songInput = useRef<HTMLInputElement>(null);
   const pdfInput = useRef<HTMLInputElement>(null);
   const docxInput = useRef<HTMLInputElement>(null);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(music.tracks) || volume !== music.volume;
+  const [starts, setStarts] = useState<MusicStart>(music.start ?? "auto");
+  const dirty = JSON.stringify(draft) !== JSON.stringify(music.tracks) || volume !== music.volume || starts !== (music.start ?? "auto");
 
   const fail = async (r: Response | null, what: string) => {
     let detail = "";
@@ -185,7 +204,7 @@ export function OwnerPanel({
 
   const saveMusic = async () => {
     setBusy(true);
-    const r = await ownerFetch("music", { method: "PUT", json: { tracks: draft, volume } });
+    const r = await ownerFetch("music", { method: "PUT", json: { tracks: draft, volume, start: starts } });
     setBusy(false);
     if (r?.ok) {
       onMusic(((await r.json()) as { music: MusicManifest }).music);
@@ -222,6 +241,7 @@ export function OwnerPanel({
       setPDraft(set.photos);
       setPSeconds(set.interval);
       setPLook(set.look);
+      setPPace(set.pace);
       toast(`Added ${files.length} photo${files.length === 1 ? "" : "s"} to the portrait`);
     } else await fail(r, "Upload");
     if (portraitInput.current) portraitInput.current.value = "";
@@ -230,7 +250,7 @@ export function OwnerPanel({
   const savePortrait = async () => {
     setBusy(true);
     const seconds = Math.min(3600, Math.max(3, Math.round(pSeconds) || 3));
-    const r = await ownerFetch("portrait", { method: "PUT", json: { photos: pDraft.map(toFile), interval: seconds, look: pLook } });
+    const r = await ownerFetch("portrait", { method: "PUT", json: { photos: pDraft.map(toFile), interval: seconds, look: pLook, pace: pPace } });
     setBusy(false);
     if (r?.ok) {
       const set = toSet(((await r.json()) as { portrait: PortraitJSON }).portrait);
@@ -238,6 +258,7 @@ export function OwnerPanel({
       setPDraft(set.photos);
       setPSeconds(set.interval);
       setPLook(set.look);
+      setPPace(set.pace);
       toast("Portrait saved");
     } else await fail(r, "Save");
   };
@@ -259,7 +280,7 @@ export function OwnerPanel({
   };
 
   return (
-    <Popup label="Owner panel" origin={origin} onClose={onClose} wide>
+    <Popup label="Owner panel" origin={origin} onClose={onClose} wide aside={tab === "template" ? side : null}>
       <p className="font-mono text-[10px] tracking-[0.3em] text-[var(--d-a)]">OWNER</p>
       <h2 className="mt-1.5 text-2xl font-semibold tracking-tight">Your site</h2>
       {/* Five tabs are wider than a phone: the row scrolls sideways there. */}
@@ -347,6 +368,20 @@ export function OwnerPanel({
               aria-label="Seconds per photo"
             />
             seconds
+          </label>
+          <label className="mt-4 block max-w-md text-[13px] text-[var(--d-ink3)]">
+            <span className="flex items-baseline justify-between gap-3">
+              How fast your skills go round you
+              <span className="font-mono text-[11px] tabular-nums text-[var(--d-ink5)]">{pPace === 0 ? "STILL" : `${pPace.toFixed(2)}×`}</span>
+            </span>
+            <input type="range" min={0} max={2} step={0.05} value={pPace} onChange={(e) => tryPace(Number(e.target.value))} className="dev-range mt-3 w-full" aria-label="How fast the skills go round" />
+            <span className="mt-1.5 flex justify-between text-[11px] text-[var(--d-ink5)]">
+              <span>still</span>
+              <button type="button" onClick={() => tryPace(1)} className="underline-offset-4 hover:underline">
+                as it was
+              </button>
+              <span>twice as fast</span>
+            </span>
           </label>
           {/* The portrait's design (§101): a way of showing the photo, or, with
               no photo, a living piece in its place. A tap shows it on the page
@@ -637,25 +672,8 @@ export function OwnerPanel({
               </div>
             )}
           </div>
-          {/* The words, group by group. */}
-          {COPY_GROUPS.map((g) => (
-            <div key={g.title} className="mt-5">
-              <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">{g.title.toUpperCase()}</p>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                {g.fields.map((f) => (
-                  <label key={f.key} className={`block text-[12px] text-[var(--d-ink4)] ${f.long ? "sm:col-span-2" : ""}`}>
-                    {f.label}
-                    {f.long ? (
-                      <textarea rows={2} value={word(copy, f.key)} onChange={(e) => setWord(f.key, e.target.value)} className={`${FIELD} mt-1 w-full resize-y`} />
-                    ) : (
-                      <input type="text" value={word(copy, f.key)} onChange={(e) => setWord(f.key, e.target.value)} className={`${FIELD} mt-1 w-full`} />
-                    )}
-                    {copy.texts[f.key] !== undefined && <span className="mt-0.5 block text-[10.5px] text-[var(--d-ink6)]">Original: {f.def}</span>}
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
+          {/* The words, group by group (§103.7: every word of every card). */}
+          <WordsEditor copy={copy} setWord={setWord} side={side} onSide={() => setSide((x) => (x === "left" ? "right" : "left"))} />
           {/* The skills going round his photo (§102.6). */}
           <SkillsEditor copy={copy} setCopy={setCopy} />
           <div className="mt-6 flex flex-wrap gap-2">
@@ -713,7 +731,30 @@ export function OwnerPanel({
 
       {tab === "sound" && (
         <div className="mt-5">
-          <p className="text-[13px] text-[var(--d-ink3)]">The volume every visitor starts at. They can still change their own.</p>
+          <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">HOW THE MUSIC BEGINS</p>
+          <div role="radiogroup" aria-label="How the music begins" className="relative mt-2.5 grid grid-cols-3 rounded-2xl border border-[var(--d-line2)] bg-[var(--d-shade)] p-1">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-1 left-1 rounded-xl transition-transform duration-300 ease-[cubic-bezier(.3,1.3,.5,1)]"
+              style={{ width: "calc((100% - 0.5rem) / 3)", transform: `translateX(${STARTS.findIndex((x) => x.id === starts) * 100}%)`, background: "linear-gradient(90deg, var(--d-a2), var(--d-b))" }}
+            />
+            {STARTS.map((x) => (
+              <button
+                key={x.id}
+                type="button"
+                role="radio"
+                aria-checked={starts === x.id}
+                data-music-start={x.id}
+                onClick={() => setStarts(x.id)}
+                className={`relative rounded-xl px-1.5 py-2.5 text-[12px] font-semibold leading-tight transition-colors sm:text-[13px] ${starts === x.id ? "text-[var(--d-on)]" : "text-[var(--d-ink3)] hover:text-[var(--d-ink)]"}`}
+              >
+                {x.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2.5 min-h-[2.6em] text-[12.5px] leading-snug text-[var(--d-ink4)]">{STARTS.find((x) => x.id === starts)?.says}</p>
+          <p className="mt-5 font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">HOW LOUD</p>
+          <p className="mt-2 text-[13px] text-[var(--d-ink3)]">The volume every visitor starts at. They can still change their own.</p>
           <label className="mt-4 flex items-center gap-3">
             <input type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(e) => setVolume(Number(e.target.value) / 100)} className="dev-range flex-1" aria-label="Default volume" />
             <span className="w-10 text-right font-mono text-[13px] tabular-nums">{Math.round(volume * 100)}</span>
@@ -724,6 +765,122 @@ export function OwnerPanel({
         </div>
       )}
     </Popup>
+  );
+}
+
+/** The smallest piece of the page that says these words (not the drifting ones behind it). */
+function whereItSays(text: string): HTMLElement | null {
+  const tidy = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
+  const want = tidy(text);
+  if (want.length < 2) return null;
+  const dive = (el: Element): HTMLElement | null => {
+    for (const child of el.children) {
+      if (child.getAttribute("aria-hidden") === "true" || !tidy(child.textContent ?? "").includes(want)) continue;
+      const deeper = dive(child);
+      if (deeper) return deeper;
+      const r = child.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return child as HTMLElement;
+    }
+    return null;
+  };
+  const root = document.querySelector(".dev-root");
+  return root ? dive(root) : null;
+}
+
+/** …brought into view beside the panel, and pointed out for a moment. */
+function showWord(text: string) {
+  if (!window.matchMedia("(min-width: 1024px)").matches) return;
+  const el = whereItSays(text);
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  if (r.top < 90 || r.bottom > window.innerHeight - 60) window.scrollTo({ top: window.scrollY + r.top - window.innerHeight * 0.42, behavior: "smooth" });
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.animate(
+    [
+      { outline: "2px solid transparent", outlineOffset: "10px" },
+      { outline: "2px solid var(--d-b2)", outlineOffset: "4px", offset: 0.25 },
+      { outline: "2px solid var(--d-b2)", outlineOffset: "4px", offset: 0.7 },
+      { outline: "2px solid transparent", outlineOffset: "8px" },
+    ],
+    { duration: still ? 1200 : 1900, easing: "ease-out" },
+  );
+}
+
+/** Every word of the page, card by card (§103.7): "we have 9 cards: their data, their
+ *  headings… each and every word if needed". Find one by what it says; empty a box and
+ *  that word is left out; ↺ brings the original back. */
+function WordsEditor({ copy, setWord, side, onSide }: { copy: Copy; setWord: (key: string, v: string) => void; side: "left" | "right"; onSide: () => void }) {
+  const [find, setFind] = useState("");
+  const needle = find.trim().toLowerCase();
+  const total = COPY_GROUPS.reduce((n, g) => n + g.fields.length, 0);
+  const mine = Object.keys(copy.texts).length;
+  return (
+    <div className="mt-5" data-words>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="font-mono text-[10px] tracking-[0.25em] text-[var(--d-a)]">EVERY WORD ON THE PAGE</p>
+        <p className="text-[11px] text-[var(--d-ink5)]">
+          {total} words{mine > 0 && `, ${mine} of them yours`}
+        </p>
+      </div>
+      <p className="mt-1.5 hidden items-baseline gap-3 text-[11.5px] text-[var(--d-ink5)] lg:flex">
+        <span>Click into a word and the page shows you where it stands.</span>
+        <button type="button" onClick={onSide} className="shrink-0 text-[var(--d-b2)] underline-offset-2 hover:underline">
+          {side === "left" ? "Move this panel right →" : "← Move this panel left"}
+        </button>
+      </p>
+      <input type="search" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a word: type any part of what you see on the page" aria-label="Find a word" className={`${FIELD} mt-2 w-full`} />
+      {COPY_GROUPS.map((g) => {
+        const fields = needle ? g.fields.filter((f) => `${g.title} ${f.label} ${f.def} ${word(copy, f.key)}`.toLowerCase().includes(needle)) : g.fields;
+        if (fields.length === 0) return null;
+        const changed = g.fields.filter((f) => copy.texts[f.key] !== undefined).length;
+        return (
+          <details key={g.title} open={needle !== "" || undefined} data-words-group={g.title} className="group/words mt-2.5 rounded-2xl border border-[var(--d-line2)] bg-[color-mix(in_srgb,var(--d-bg)_70%,transparent)]">
+            <summary className="flex cursor-pointer list-none items-center gap-2 rounded-2xl px-4 py-3 text-[13px] font-medium text-[var(--d-ink)] [&::-webkit-details-marker]:hidden">
+              <span aria-hidden className="text-[var(--d-ink5)] transition-transform group-open/words:rotate-90">
+                ›
+              </span>
+              {g.title}
+              {changed > 0 && <span className="rounded-full border border-[var(--d-b)]/40 px-2 py-0.5 text-[10px] text-[var(--d-b2)]">{changed} changed</span>}
+              <span className="ml-auto font-mono text-[10px] tabular-nums text-[var(--d-ink6)]">{fields.length}</span>
+            </summary>
+            <div className="border-t border-[var(--d-line)] px-4 pb-4 pt-3">
+              {g.note && <p className="mb-3 text-[11.5px] leading-relaxed text-[var(--d-ink5)]">{g.note}</p>}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {fields.map((f) => {
+                  const own = copy.texts[f.key];
+                  const value = own ?? word(copy, f.key);
+                  return (
+                    <div key={f.key} className={f.long ? "sm:col-span-2" : ""}>
+                      <label className="block text-[12px] text-[var(--d-ink4)]">
+                        {f.label}
+                        {f.long ? (
+                          <textarea rows={f.def.length > 150 ? 4 : 2} maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} onFocus={() => showWord(value)} data-word={f.key} className={`${FIELD} mt-1 w-full resize-y`} />
+                        ) : (
+                          <input type="text" maxLength={600} value={value} onChange={(e) => setWord(f.key, e.target.value)} onFocus={() => showWord(value)} data-word={f.key} className={`${FIELD} mt-1 w-full`} />
+                        )}
+                      </label>
+                      {own !== undefined && (
+                        <p className="mt-0.5 flex items-baseline gap-2 text-[10.5px] text-[var(--d-ink6)]">
+                          <span className="min-w-0 truncate" title={f.def}>
+                            Original: {f.def || "nothing"}
+                          </span>
+                          <button type="button" onClick={() => setWord(f.key, f.def)} aria-label={`${f.label}: back to the original`} className="shrink-0 text-[var(--d-b2)] underline-offset-2 hover:underline">
+                            ↺ bring it back
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </details>
+        );
+      })}
+      {needle !== "" && !COPY_GROUPS.some((g) => g.fields.some((f) => `${g.title} ${f.label} ${f.def} ${word(copy, f.key)}`.toLowerCase().includes(needle))) && (
+        <p className="mt-3 text-[12px] text-[var(--d-ink5)]">Nothing on the page says that.</p>
+      )}
+    </div>
   );
 }
 
