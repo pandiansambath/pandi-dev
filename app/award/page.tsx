@@ -19,6 +19,7 @@ import { dropDoors, rememberedWords, rememberWords } from "@/dev/awardDoor";
 import { AWARD_MODEL_FILES, DOOR_IMG, wallFiles } from "@/dev/awardFiles";
 import { arrive } from "@/dev/chunks";
 import { cleanCopy, safeLink, word } from "@/dev/copy";
+import { did, hasDone } from "@/dev/did";
 import { Kural } from "@/dev/Kural";
 import { PlainAward } from "@/dev/Medal";
 import { AWARD_TRACK, musicHeard, musicWaits, setSoundMuted, soundMuted } from "@/dev/music";
@@ -85,7 +86,16 @@ export default function AwardPage() {
   const open = ready && words.known;
   // The Kural's leaves (a click on it, in the wall or above).
   const [leaves, setLeaves] = useState(false);
-  const onVerse = useCallback(() => setLeaves(true), []);
+  const [read, setRead] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setRead(hasDone("kural")), 0);
+    return () => window.clearTimeout(t);
+  }, []);
+  const onVerse = useCallback(() => {
+    did("kural");
+    setRead(true);
+    setLeaves(true);
+  }, []);
   const offVerse = useCallback(() => setLeaves(false), []);
   // How far down the words at the top reach: the coin hangs below them.
   const head = useRef<HTMLDivElement>(null);
@@ -225,7 +235,7 @@ export default function AwardPage() {
     <main className={`${ancient.className} fixed inset-0 overflow-hidden bg-[#07060a] text-[#e6edf5]`} onPointerMove={onLight} onPointerDown={onLight}>
       {/* The app's touch ripple is off in here: a ring of water on a wooden
           chest breaks the room; the blow leaves its own mark. */}
-      <style>{`.mise-ripple{display:none!important}html:root{scrollbar-gutter:auto}`}</style>
+      <style>{`.mise-ripple{display:none!important}html:root{scrollbar-gutter:auto}.award-words{transition:opacity .9s}main[data-near] .award-words{opacity:.06}main[data-near] .award-shade{opacity:0}`}</style>
       {/* Start the chest downloading with the HTML, not after the renderer has
           booted. It used to be requested only once three.js had parsed and the
           scene was built, which put the whole model behind a chain of waits. */}
@@ -247,11 +257,12 @@ export default function AwardPage() {
         onVerse={onVerse}
         under={under}
         plain={plain}
-        words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "" }}
+        read={read}
+        words={{ strike: w("awardStrike"), again: w("awardAgain"), breaking: w("awardBreaking"), coinLink: safeLink(w("coinLink")) ?? "", coinSays: w("coinSays"), light: w("awardLight"), lamps: w("awardLamps"), lampsLeft: w("awardLampsLeft"), awake: w("awardAwake"), kuralOne: w("kuralHintOne"), kuralTwo: w("kuralHintTwo"), kuralAfter: w("kuralHintAfter") }}
       />
 
       {/* Above: whose award it is. */}
-      <div ref={head} className="pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-7">
+      <div ref={head} className="award-words pointer-events-none absolute inset-x-0 top-0 px-6 pt-6 text-center sm:pt-7">
         <p
           className="dev-gold text-[10px] font-semibold tracking-[0.42em] sm:text-[11px]"
           style={{ animation: "devFadeUp .8s .1s ease-out both" }}
@@ -274,13 +285,17 @@ export default function AwardPage() {
           style={{ textShadow: "0 0 2px rgba(0,0,0,.95), 0 1px 12px rgba(0,0,0,.95), 0 0 26px rgba(0,0,0,.8)" }}
         >
           “{w("awardVerse")}” <span className="ml-1 whitespace-nowrap text-[9.5px] tracking-[0.24em] text-[#e0b36a]">{w("awardVerseBy")}</span>
+          {/* On a phone the coin hangs before the wall's verse: what is said of it stands here. */}
+          <span className={`award-line-in mt-1 block lg:hidden ${awake && opened ? "opacity-100" : "opacity-0"}`}>
+            {read ? w("kuralHintAfter") : [w("kuralHintOne"), w("kuralHintTwo")].filter(Boolean).join(". ")}
+          </span>
         </button>
       </div>
 
       {/* Below: the citation, which only earns its place once it is open. It stands on a shade
           that your light goes through (it used to put the light out: §106.5). */}
       <div ref={shade} aria-hidden className={`award-shade pointer-events-none absolute inset-x-0 bottom-0 h-1/2 transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`} />
-      <div className={`pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-7 pt-20 text-center transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`}>
+      <div className={`award-words pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-7 pt-20 text-center transition-opacity duration-1000 ${opened ? "opacity-100" : "opacity-0"}`}>
         <p className="dev-gold mx-auto max-w-2xl text-[13px] leading-relaxed sm:text-base">
           <Bold text={w("awardCitation")} />
         </p>
@@ -301,6 +316,8 @@ export default function AwardPage() {
       {leaves && (
         <Kural
           onClose={offVerse}
+          down={w("kuralDown")}
+          shutWords={w("kuralShut")}
           words={{ head: w("kuralHead"), one: w("kuralOne"), two: w("kuralTwo"), said: w("kuralSaid"), words: w("kuralWords"), means: w("kuralMeans"), own: w("kuralOwn"), mine: w("kuralMine") }}
         />
       )}

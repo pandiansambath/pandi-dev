@@ -35,6 +35,7 @@
 // plain one (its graphics can keep only a few of the other kind), drawn from four stamps.
 
 import { readRGB, THEME_EVENT } from "./theme";
+import { did } from "./did";
 import { water } from "./flow";
 import { atLeisure, covered } from "./stage";
 
@@ -411,6 +412,8 @@ class Scatter {
     const mask = attrs(document.createElementNS(ns, "feColorMatrix"), { in: "m", type: "matrix", values: "0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 2.2 0 -0.75", result: "a" });
     const move = attrs(document.createElementNS(ns, "feDisplacementMap"), { in: "SourceGraphic", in2: "m", scale: `${REACH}`, xChannelSelector: "R", yChannelSelector: "G", result: "d" });
     const cut = attrs(document.createElementNS(ns, "feComposite"), { in: "d", in2: "a", operator: "in" });
+    // (What it showed before may be gone.)
+    this.fe.removeAttribute("href");
     f.append(this.fe, mask, move, cut);
     this.svg.replaceChildren(f);
   }
@@ -463,6 +466,7 @@ class Scatter {
     if (dt > 0) {
       // (Not the site's door, while it loads.)
       if (!covered()) this.letGo();
+      if (this.n > 24) did("hand");
       this.carry(dt);
     }
     if (!this.n) {

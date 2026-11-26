@@ -23,6 +23,7 @@ import { AWARD_TRACK, getPlayer, releasePlayer, type MusicManifest, type Player 
 import { awardFiles, canWarmAward } from "./awardFiles";
 import { rememberWords } from "./awardDoor";
 import { arrive } from "./chunks";
+import { did } from "./did";
 import { OwnerPanel } from "./OwnerPanel";
 import { PortraitLookDefs } from "./PortraitLooks";
 import type { PortraitLook } from "./portraits";
@@ -45,6 +46,8 @@ const BentoDesign = dynamic(() => arrive(() => import("./BentoDesign").then((m) 
 const BlueprintDesign = dynamic(() => arrive(() => import("./BlueprintDesign").then((m) => m.BlueprintDesign), ChainDesign));
 const StoriesDesign = dynamic(() => arrive(() => import("./StoriesDesign").then((m) => m.StoriesDesign), ChainDesign));
 const EmberDesign = dynamic(() => arrive(() => import("./EmberDesign").then((m) => m.EmberDesign), ChainDesign));
+
+const KalDesign = dynamic(() => arrive(() => import("./kal/KalDesign").then((m) => m.KalDesign), ChainDesign));
 
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 const STORE = "pandi-dev:look";
@@ -256,7 +259,10 @@ export function DevProfile({
   }, [send, look, toast]);
 
   const openAlbum = useCallback(() => setAlbumOpen(true), []);
-  const openResume = useCallback(() => setResumeOpen(true), []);
+  const openResume = useCallback(() => {
+    did("resume");
+    setResumeOpen(true);
+  }, []);
 
   // The hidden album: type "album" anywhere, or the Konami code.
   const buffer = useRef("");
@@ -447,6 +453,8 @@ export function DevProfile({
             <StoriesDesign />
           ) : look.design === "ember" ? (
             <EmberDesign />
+          ) : look.design === "kal" ? (
+            <KalDesign />
           ) : (
             <ChainDesign />
           )}

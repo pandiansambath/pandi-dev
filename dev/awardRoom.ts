@@ -26,6 +26,7 @@ import type { Mesh as Mesh3, MeshStandardMaterial, Texture } from "three";
 import { ask } from "./ask";
 import { CHEST_GLTF, COIN_TEX, ENV_TEX, FLOOR_TEX, HALL_TEX, HAMMER_GLTF, wallTex } from "./awardFiles";
 import { buildCoin, strikeFace } from "./awardCoin";
+import { buildCoinView } from "./awardCoinView";
 import { buildHall, carveWall, FLOOR_Y, softTexture, WALL_Z, type Relief, type T3 } from "./awardHall";
 import { buildLens, type Lens } from "./awardLens";
 import { playBreak, playClank, playClink, playFire, playHit } from "./chestBits";
@@ -41,6 +42,14 @@ export type RoomEvents = {
   /** All four lamps lit. */
   awake?: () => void;
   coin: (c: CoinBox) => void;
+  /** The coin has come close, to be looked at (or gone back). */
+  close?: (on: boolean) => void;
+  /** A lamp has caught from the light one carries: so many are lit. */
+  lamp?: (lit: number) => void;
+  /** The verse is being told in English under the light (or no longer). */
+  told?: (on: boolean) => void;
+  /** Where the foot of each panel of it is on the canvas (CSS px). */
+  panels?: (at: { x: number; y: number }[]) => void;
 };
 
 export type Room = {
@@ -53,7 +62,9 @@ export type Room = {
   /** The light, to where the pointer (or a finger) is. */
   point: (nx: number, ny: number, touch: boolean) => void;
   /** Whether the pointer is on the coin. */
-  hold: (on: boolean) => void;
+  hold: (on: boolean, closer?: boolean) => void;
+  /** Whether a light should pass behind the Kural's letters now and then. */
+  beckon: (on: boolean) => void;
   /** The coin turned by hand: taken; moved by so much of its own radius; let go. */
   turn: (what: "take" | "move" | "let", dx?: number, dy?: number) => void;
   /** How far down the words at the top reach (CSS px): the coin hangs below them. */
@@ -263,7 +274,10 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
     canvas.remove();
   };
   try {
-    renderer.setPixelRatio(lite ? 1 : pixelRatio("award", phone));
+    // How finely the room is drawn. A desktop's goes through the lens, and steps down where the
+    // graphics are slow; its canvas is the screen's own pixels always, and so is the coin on it.
+    let roomRatio = lite ? 1 : pixelRatio("award", phone);
+    renderer.setPixelRatio(lens ? Math.min(window.devicePixelRatio || 1, 1.75) : roomRatio);
     renderer.shadowMap.enabled = !lite;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.shadowMap.autoUpdate = false;
@@ -565,7 +579,13 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
     hall.casts(coin);
     // Its place at the end (in front of you; worked out in fit), and its turning:
     // round and round, until you point at it — then it shows you its face.
-    const goal = { p: new THREE.Vector3(0, 0.6, 2), s: 0.5, lookY: 0.4 };
+    const goal = { p: new THREE.Vector3(0, 0.6, 2), s: 0.5, lookY: 0.4, np: new THREE.Vector3(0, 0.6, 2), ns: 0.6 };
+    // Held still under the hand it comes closer, to be read.
+    const close = { want: false, v: 0 };
+    const kural = { tells: false, beckon: true, t: -3 };
+    // Untouched for a while once it is out, the coin is pushed, as by a finger: it can be turned.
+    const nudge = { t: 0, done: false };
+    const rakeTo = new THREE.Vector3();
     const spin = { a: 0, v: 0, tx: 0, ty: 0, held: false };
     // …or yours: pulled round any way you like (§106.2), running on when it is let go, and a
     // while after that upright and turning by itself again.
@@ -1166,6 +1186,21 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         else hall.want.set(0, 0.7, 2.2);
       } else carry(point.nx, point.ny, hall.want);
 
+      // The Kural: told, or not; and now and then a light goes by behind its letters.
+      // (By the visitor's own light: the one that wanders by itself says nothing.)
+      const tells = point.seen && !(point.touch && idle > 2.6) && hall.told.some((v) => v > 0.9);
+      if (tells !== kural.tells) {
+        kural.tells = tells;
+        cb?.told?.(tells);
+      }
+      kural.t += dt;
+      if (tells || !kural.beckon || still) kural.t = Math.min(kural.t, 0);
+      const go = kural.t - 5;
+      const wallW = hall.verse.reduce((a, r) => Math.max(a, Math.abs(r.x) + r.w), 0);
+      if (go > 0 && go < 2.6) hall.behind.value.set((go / 2.6) * (2 * wallW + 1.2) - wallW - 0.6, Math.sin(Math.min(1, go / 2.6) * Math.PI) ** 0.5 * 0.9);
+      else hall.behind.value.y = 0;
+      if (go > 9) kural.t = 0;
+
       // Near a lamp, it catches.
       if (point.seen && idle < 1.5) {
         for (let i = 0; i < 4; i++) {
@@ -1174,7 +1209,10 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
           proj.copy(l.at).project(camera);
           const dx = (proj.x - point.nx) * camera.aspect;
           const dy = proj.y - point.ny;
-          if (dx * dx + dy * dy < 0.0132 && hall.ignite(i)) playFire();
+          if (dx * dx + dy * dy < 0.0132 && hall.ignite(i)) {
+            playFire();
+            cb?.lamp?.(hall.lamps.filter((x) => x.on).length);
+          }
         }
       }
       if (opened) {
@@ -1210,9 +1248,22 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         const up = ease(Math.min(1, c / 0.55));
         const to = ease(Math.max(0, (c - 0.3) / 0.7));
         proj.set(0, TOP - 0.4 + up * 1.15, 0.1);
-        coin.position.lerpVectors(proj, goal.p, to);
-        coin.position.y += Math.sin(t * 1.1) * 0.012 * to;
-        coin.scale.setScalar(0.28 + (goal.s - 0.28) * to);
+        close.v += ((close.want && c >= 1 ? 1 : 0) - close.v) * (1 - Math.exp(-dt * 3.2));
+        if (close.v < 0.0005) close.v = 0;
+        coin.position.lerpVectors(proj, goal.p, to).lerp(goal.np, close.v);
+        coin.position.y += Math.sin(t * 1.1) * 0.012 * to * (1 - close.v);
+        coin.scale.setScalar(0.28 + (goal.s - 0.28) * to + (goal.ns - goal.s) * close.v);
+        // The low light that shows its relief: from the upper left; under the hand, from there.
+        proj2.copy(coin.position).project(camera);
+        rakeTo.set(-0.64, 0.7, 0.32);
+        if (spin.held) {
+          const px = (point.nx - proj2.x) * camera.aspect;
+          const py = point.ny - proj2.y;
+          const far = Math.hypot(px, py);
+          // (Right over its middle it would be flat: never that steep.)
+          if (far > 0.02) rakeTo.set(px / far, py / far, 0.34);
+        }
+        struck.rake.lerp(rakeTo, 1 - Math.exp(-dt * 4));
         if (mine.on) spin.v *= Math.exp(-dt * 4);
         else if (spin.held && c >= 1) {
           const face = Math.round(spin.a / Math.PI) * Math.PI;
@@ -1220,9 +1271,22 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         } else spin.v += ((still ? 0 : 0.62 + (1 - c) * 7.5) - spin.v) * (1 - Math.exp(-dt * 2.4));
         spin.a += spin.v * dt;
         const k2 = 1 - Math.exp(-dt * 6);
-        spin.tx += ((spin.held ? -point.ny * 0.5 + 0.1 : 0.05) - spin.tx) * k2;
-        spin.ty += ((spin.held ? point.nx * 0.55 : 0) - spin.ty) * k2;
+        // (Looked at from close, it lies still and straight.)
+        spin.tx += ((spin.held ? (-point.ny * 0.5 + 0.1) * (1 - 0.85 * close.v) : 0.05) - spin.tx) * k2;
+        spin.ty += ((spin.held ? point.nx * 0.55 * (1 - 0.8 * close.v) : 0) - spin.ty) * k2;
         selfE.set(spin.tx, spin.a + spin.ty, Math.sin(t * 0.7) * 0.02);
+        if (c >= 1 && !nudge.done && !mine.on && !spin.held && !still) {
+          nudge.t += dt;
+          if (nudge.t > 6) {
+            nudge.done = true;
+            mine.on = true;
+            mine.taken = false;
+            mine.q.copy(coin.quaternion);
+            mine.wx = 5.4;
+            mine.wy = 0.5;
+            mine.since = mine.back = 0;
+          }
+        }
         if (mine.on) {
           if (!mine.taken) {
             pull(mine.wx * dt, mine.wy * dt);
@@ -1279,14 +1343,31 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       hall.step(dt, t, { open: opened ? openT : 0, inner: innerI, innerAt, rim: RIM, flash, flashAt, face: -chest.rotation.y, shaft: ease(Math.min(1, Math.max(0, (t - born) / 2.2))) });
     };
 
+    // Where the coin is on the canvas (CSS px).
+    const spot = { x: 0, y: 0, r: 1, w: 1, h: 1, ratio: 1 };
+    const coinAt = () => {
+      const w = (spot.w = host?.clientWidth || window.innerWidth);
+      const h = (spot.h = host?.clientHeight || window.innerHeight);
+      proj.copy(coin.position).project(camera);
+      const d = proj2.copy(coin.position).sub(camera.position).length();
+      spot.x = ((proj.x + 1) / 2) * w;
+      spot.y = ((1 - proj.y) / 2) * h;
+      spot.r = ((coin.scale.x / d / Math.tan((camera.fov * Math.PI) / 360)) * h) / 2;
+      spot.ratio = renderer.getPixelRatio();
+      return spot;
+    };
+    const view = lens ? buildCoinView(THREE, renderer, scene, camera, coin) : null;
+
     const draw = () => {
       scene.updateMatrixWorld();
       // The two shadows take turns, a frame each.
       if ((frameNo & 1) === 1) hall.shadow();
       else renderer.shadowMap.needsUpdate = true;
       frameNo++;
-      if (lens) lens.draw(scene, camera, t);
-      else renderer.render(scene, camera);
+      if (lens) {
+        lens.draw(scene, camera, t, close.v);
+        if (coin.visible && view) view.draw(coinAt());
+      } else renderer.render(scene, camera);
     };
 
     const tick = (now: number) => {
@@ -1299,17 +1380,21 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       gpu.end();
       // Where the coin is on the page, for the link over it.
       if (opened && cb && host) {
-        const w = host.clientWidth;
-        const h = host.clientHeight;
-        proj.copy(coin.position).project(camera);
-        const d = proj2.copy(coin.position).sub(camera.position).length();
-        const x = ((proj.x + 1) / 2) * w;
-        const y = ((1 - proj.y) / 2) * h;
-        const r = ((coin.scale.x / d / Math.tan((camera.fov * Math.PI) / 360)) * h) / 2;
+        const { x, y, r } = coinAt();
         const on = openT >= 0.9;
         if (on !== boxed.on || Math.abs(x - boxed.x) + Math.abs(y - boxed.y) + Math.abs(r - boxed.r) > 0.6) {
           Object.assign(boxed, { x, y, r, on });
           cb.coin(boxed);
+        }
+        if (on && cb.panels && frameNo % 6 === 0) {
+          const w = host.clientWidth;
+          const h = host.clientHeight;
+          cb.panels(
+            hall.verse.map((v) => {
+              proj.set(v.x, v.y - v.h, WALL_Z).project(camera);
+              return { x: ((proj.x + 1) / 2) * w, y: ((1 - proj.y) / 2) * h };
+            }),
+          );
         }
       }
       if (!shown) {
@@ -1355,9 +1440,14 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       goal.p.set(0, (1 - (2 * mid) / h) * dc * t2, -dc);
       probe.localToWorld(goal.p);
       goal.s = (rad / (h / 2)) * dc * t2;
+      // Come close: as large as the screen lets it be read.
+      const large = Math.max(rad, Math.min(h * 0.415, w * 0.46));
+      goal.np.set(0, 0, -dc);
+      probe.localToWorld(goal.np);
+      goal.ns = (large / (h / 2)) * dc * t2;
       renderer.setSize(w, h, false);
-      lens?.size(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
-      const focal = (h * renderer.getPixelRatio()) / 2 / t2;
+      lens?.size(w * roomRatio, h * roomRatio);
+      const focal = (h * (lens ? roomRatio : renderer.getPixelRatio())) / 2 / t2;
       // The sparks' heads: world size to pixels.
       hdMat.uniforms.uFocal.value = focal;
       hall.fit({ half: (z) => (camBase.z - z) * t2 * asp, focal, tall });
@@ -1369,7 +1459,8 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       "award",
       phone,
       (ratio) => {
-        renderer.setPixelRatio(ratio);
+        roomRatio = ratio;
+        if (!lens) renderer.setPixelRatio(ratio);
         fit();
       },
       !phone,
@@ -1405,6 +1496,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         gone();
       }
       jobs.push(lens.warm());
+      if (view) jobs.push(view.warm());
       await Promise.all(jobs);
       gone();
       o.progress?.(0.9);
@@ -1432,6 +1524,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
       jobs.push(renderer.compileAsync(scene, camera).catch(() => {}));
       renderer.setRenderTarget(null);
       if (lens) jobs.push(lens.warm());
+      if (view) jobs.push(view.warm());
       // While the shaders build: the models' pictures to the GPU, one by one.
       const pics = new Set<Texture>();
       scene.traverse((c) => {
@@ -1514,8 +1607,12 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
           hover.dirty = true;
         }
       },
-      hold: (on) => {
+      hold: (on, closer = false) => {
         spin.held = on;
+        const want = on && closer && opened;
+        if (want === close.want) return;
+        close.want = want;
+        cb?.close?.(want);
       },
       turn: (what, dx = 0, dy = 0) => {
         if (!opened || openT < 0.9) return;
@@ -1523,7 +1620,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         if (what === "take") {
           if (!mine.on) mine.q.copy(coin.quaternion);
           else if (mine.back > 0) mine.q.copy(coin.quaternion);
-          mine.on = mine.taken = true;
+          mine.on = mine.taken = nudge.done = true;
           mine.wx = mine.wy = mine.back = mine.since = 0;
           mine.t = now;
         } else if (what === "move") {
@@ -1539,6 +1636,9 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
           // (Held still before it was let go: it stays.)
           if (now - mine.t > 110) mine.wx = mine.wy = 0;
         }
+      },
+      beckon: (on) => {
+        kural.beckon = on;
       },
       under: (px) => {
         if (Math.abs(px - above) < 2) return;
@@ -1561,6 +1661,7 @@ export async function buildRoom(o: { lite: boolean; calm: () => Promise<void>; a
         ro.disconnect();
         hall.dispose();
         struck.dispose();
+        view?.dispose();
         lens?.dispose();
         scene.traverse((c) => {
           const m = c as Mesh;

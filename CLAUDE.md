@@ -536,6 +536,32 @@ medal). Graphics taken away, or a browser that died twice building the room (cou
 live site the previous build's hashed files stay on the server for one more deploy
 (`keep-last-static.mjs` in the monorepo).
 
+**The ball goes into the skeleton (§107–110).** A card winds up into a glass ball as it leaves its
+place (`orbit.ts` rows = the CSS keyframes); once closed and within the skeleton's reach it is handed to
+the skeleton (`guests.ts`, `spineGuests.ts`), which draws it among the bones: the bones draw it in, its
+skin lets go as it enters, and what was in it becomes a liquid winding round the cord (sheets of one
+cloud at their own depths, so the bones stand in it) with a thousand drops on their own turns, soaking
+into the bones' veins and nerves. The melt runs in its own time (`MELTS` 2 s); a melt begun is undone
+only by a clear scroll back (`UNDO`): a phone's screen grows and shrinks as its address bar slides and
+made it melt twice. The next card comes out of the bones the same way.
+
+**The background is flown through (§108.2).** `flight.ts` holds the shared speed; `DustField` draws
+deep dust as instanced streaks (head to where it was a shutter's time ago), clouds in the water's own
+small picture, a light ahead; it gathers speed with the scroll and glides on; streaks keep to the
+view's edges; the words in `ChainField` come out of the distance and pass.
+
+**Guidance (§107.4).** One quiet line at a time (`Guide.tsx`), gone once its thing is done (`did.ts`,
+events `dev-did`); every word in the Template; nothing ever points at PS or the photo.
+
+**KAL · கல் (being built, shown by `?design=kal` only).** A temple cut from one rock (docs in the
+monorepo: `docs/TEMPLE_DESIGN.md`, `docs/temple/ART.md`, `WORDS.md`). Carvings are baked by
+`ops/art/sculpt.py` + `bake_kal.py` into slope/height/material pictures (`public/dev/kal`, map in
+`dev/kal/map.json`) and lit live by one raw-WebGL2 canvas that rides with the page (`dev/kal/stone.ts`,
+`world.ts`): a torch at the hand, rows of clay lamps, the moon; tiles so each pays only for the light
+that reaches it; cut letters (`letters.ts`) drawn by the browser and filled with gold; raw rock that lets
+go cell by cell; the water at the foot with lamps afloat and two fish. Halls are plain HTML with
+`data-stone` / `data-cut` marks (`Hall.tsx`, `Halls.tsx`).
+
 **Dates are always live.** Every number derived from time (years in the chain,
 months, days, the "3 YEARS IN …" countdown, the finale's day count) is computed
 in the browser from `CAREER_START` (1 Jan 2024) and ticks. Never hard-code one.

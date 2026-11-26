@@ -45,7 +45,8 @@ def main() -> None:
     # The site's components, the two pages, its static files and fonts.
     copytree(FE / "dev", HERE / "dev")
     copytree(FE / "public" / "dev", HERE / "public" / "dev")
-    for font in ("geist.woff2", "geist-mono.woff2", "fraunces.woff2", "fraunces-italic.woff2", "cinzel.woff2"):
+    for font in ("geist.woff2", "geist-mono.woff2", "fraunces.woff2", "fraunces-italic.woff2", "cinzel.woff2",
+                 "source-serif.woff2", "source-serif-italic.woff2", "noto-serif-tamil.woff2"):
         copy(FE / "app" / "fonts" / font, HERE / "app" / "fonts" / font)
     # (And the rest of the award page's folder: its own error page.)
     for f in (FE / "app" / "award").iterdir():
